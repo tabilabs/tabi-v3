@@ -40,8 +40,8 @@ For the most up to date documentation please visit https://docs.tabichain.com/
 **Clone git repository**
 
 ```bash
-git clone https://github.com/tabilabs/tabi-v2
-cd tabiv-v2
+git clone https://github.com/tabilabs/tabi-v3
+cd tabiv-v3
 git checkout $VERSION
 make build
 ```
