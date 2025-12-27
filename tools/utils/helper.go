@@ -1,0 +1,63 @@
+package utils
+
+import (
+	"fmt"
+
+	"github.com/CosmWasm/wasmd/x/wasm"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	acltypes "github.com/cosmos/cosmos-sdk/x/accesscontrol/types"
+	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
+	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+	capabilitytypes "github.com/cosmos/cosmos-sdk/x/capability/types"
+	distrtypes "github.com/cosmos/cosmos-sdk/x/distribution/types"
+	evidencetypes "github.com/cosmos/cosmos-sdk/x/evidence/types"
+	"github.com/cosmos/cosmos-sdk/x/feegrant"
+	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
+	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
+	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
+	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
+	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
+	ibctransfertypes "github.com/cosmos/ibc-go/v3/modules/apps/transfer/types"
+	ibchost "github.com/cosmos/ibc-go/v3/modules/core/24-host"
+	evmtypes "github.com/tabilabs/tabi-v3/x/evm/types"
+)
+
+var ModuleKeys = sdk.NewKVStoreKeys(
+	acltypes.StoreKey, authtypes.StoreKey, authzkeeper.StoreKey, banktypes.StoreKey, stakingtypes.StoreKey,
+	minttypes.StoreKey, distrtypes.StoreKey, slashingtypes.StoreKey,
+	govtypes.StoreKey, paramstypes.StoreKey, ibchost.StoreKey, upgradetypes.StoreKey, feegrant.StoreKey,
+	evidencetypes.StoreKey, ibctransfertypes.StoreKey, capabilitytypes.StoreKey,
+	evmtypes.StoreKey, wasm.StoreKey,
+)
+
+var Modules = []string{
+	"aclaccesscontrol",
+	"authz",
+	"acc",
+	"bank",
+	"capability",
+	"distribution",
+	"epoch",
+	"evidence",
+	"evm",
+	"feegrant",
+	"gov",
+	"ibc",
+	"mint",
+	"oracle",
+	"params",
+	"slashing",
+	"staking",
+	"transfer",
+	"upgrade",
+	"wasm"}
+
+func BuildRawPrefix(moduleName string) string {
+	return fmt.Sprintf("s/k:%s/n", moduleName)
+}
+
+func BuildTreePrefix(moduleName string) string {
+	return fmt.Sprintf("s/k:%s/", moduleName)
+}

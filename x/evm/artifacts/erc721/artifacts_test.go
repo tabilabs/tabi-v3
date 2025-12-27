@@ -1,0 +1,24 @@
+package erc721_test
+
+import (
+	"sync"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"github.com/tabilabs/tabi-v3/x/evm/artifacts/erc721"
+)
+
+// run with `-race`
+func TestGetBinConcurrent(t *testing.T) {
+	var wg sync.WaitGroup
+
+	for i := 0; i < 100; i++ {
+		wg.Add(1)
+		go func(val int) {
+			defer wg.Done()
+			require.NotEmpty(t, erc721.GetBin())
+		}(i)
+	}
+
+	wg.Wait()
+}
