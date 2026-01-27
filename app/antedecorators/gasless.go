@@ -52,10 +52,11 @@ func (gd GaslessDecorator) handleWrapped(ctx sdk.Context, tx sdk.Tx, simulate bo
 	}
 	// iterating instead of recursing the handler for readability
 	for _, handler := range gd.wrapped {
-		ctx, err := handler.AnteHandle(ctx, tx, simulate, terminatorHandler)
+		newCtx, err := handler.AnteHandle(ctx, tx, simulate, terminatorHandler)
 		if err != nil {
-			return ctx, err
+			return newCtx, err
 		}
+		ctx = newCtx
 	}
 	return next(ctx, tx, simulate)
 }

@@ -19,8 +19,8 @@ import (
 	"github.com/tendermint/tendermint/rpc/coretypes"
 )
 
-const highTotalGasUsedThreshold = 8500000
-const defaultPriorityFeePerGas = 1000000000 // 1gwei
+const defaultHighGasUsedThreshold = 8500000
+const defaultPriorityFeePerGas = 1000000000
 
 type InfoAPI struct {
 	tmClient         rpcclient.Client
@@ -83,7 +83,7 @@ func (i *InfoAPI) GasPrice(ctx context.Context) (result *hexutil.Big, returnErr 
 	if err != nil {
 		return nil, err
 	}
-	feeHist, err := i.FeeHistory(ctx, 1, rpc.LatestBlockNumber, []float64{0.5})
+	feeHist, err := i.FeeHistory(ctx, 1, rpc.LatestBlockNumber, []float64{50})
 	if err != nil {
 		return nil, err
 	}
@@ -96,9 +96,19 @@ func (i *InfoAPI) GasPrice(ctx context.Context) (result *hexutil.Big, returnErr 
 	return i.GasPriceHelper(ctx, baseFee, totalGasUsed, medianRewardPrevBlock)
 }
 
-// Helper function useful for testing
+func (i *InfoAPI) getCongestionThreshold(sdkCtx sdk.Context) uint64 {
+	if sdkCtx.ConsensusParams() != nil && sdkCtx.ConsensusParams().Block != nil {
+		maxGas := sdkCtx.ConsensusParams().Block.MaxGas
+		if maxGas > 0 {
+			return uint64(maxGas / 10 * 8)
+		}
+	}
+	return defaultHighGasUsedThreshold
+}
+
 func (i *InfoAPI) GasPriceHelper(ctx context.Context, baseFee *big.Int, totalGasUsedPrevBlock uint64, medianRewardPrevBlock *big.Int) (*hexutil.Big, error) {
-	isChainCongested := totalGasUsedPrevBlock > highTotalGasUsedThreshold
+	sdkCtx := i.ctxProvider(LatestCtxHeight)
+	isChainCongested := totalGasUsedPrevBlock > i.getCongestionThreshold(sdkCtx)
 	if !isChainCongested {
 		// chain is not congested, increase base fee by 10% to get the gas price to get a tx included in a timely manner
 		gasPrice := new(big.Int).Mul(baseFee, big.NewInt(110))
@@ -199,22 +209,19 @@ func (i *InfoAPI) FeeHistory(ctx context.Context, blockCount math.HexOrDecimal64
 }
 
 func (i *InfoAPI) MaxPriorityFeePerGas(ctx context.Context) (*hexutil.Big, error) {
-	// Checks the most recent block. If it has high gas used, it will return the reward of the 50% percentile.
-	// Otherwise, since the previous block has low gas used, a user shouldn't need to tip a high amount to get included,
-	// so a default value is returned.
 	startTime := time.Now()
 	defer recordMetrics("eth_maxPriorityFeePerGas", i.connectionType, startTime, true)
+	sdkCtx := i.ctxProvider(LatestCtxHeight)
 	totalGasUsed, err := i.getCongestionData(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
-	isChainCongested := totalGasUsed > highTotalGasUsedThreshold
+	isChainCongested := totalGasUsed > i.getCongestionThreshold(sdkCtx)
 	if !isChainCongested {
 		// chain is not congested, return 1gwei as the default priority fee per gas
 		return (*hexutil.Big)(big.NewInt(defaultPriorityFeePerGas)), nil
 	}
-	// chain is congested, return the 50%-tile reward as the priority fee per gas
-	feeHist, err := i.FeeHistory(ctx, 1, rpc.LatestBlockNumber, []float64{0.5})
+	feeHist, err := i.FeeHistory(ctx, 1, rpc.LatestBlockNumber, []float64{50})
 	if err != nil {
 		return nil, err
 	}
@@ -247,13 +254,17 @@ func (i *InfoAPI) getRewards(block *coretypes.ResultBlock, baseFee *big.Int, rew
 	for _, txbz := range block.Block.Txs {
 		ethtx := getEthTxForTxBz(txbz, i.txConfigProvider(block.Block.Height).TxDecoder())
 		if ethtx == nil {
-			// not evm tx
 			continue
 		}
-		// okay to get from latest since receipt is immutable
-		receipt, err := i.keeper.GetReceipt(i.ctxProvider(LatestCtxHeight), ethtx.Hash())
+		receipt, err := i.keeper.GetReceiptWithRetry(i.ctxProvider(LatestCtxHeight), ethtx.Hash(), 3)
 		if err != nil {
-			return nil, err
+			if err.Error() != "not found" {
+				fmt.Printf("Warning: getRewards failed to get receipt for tx %s: %v\n", ethtx.Hash().Hex(), err)
+			}
+			continue
+		}
+		if receipt.BlockNumber != uint64(block.Block.Height) {
+			continue
 		}
 		receiptEffectiveGasPrice := new(big.Int).SetUint64(receipt.EffectiveGasPrice)
 		if receiptEffectiveGasPrice.Cmp(baseFee) < 0 {

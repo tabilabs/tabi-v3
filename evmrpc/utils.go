@@ -19,6 +19,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
+	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tabilabs/tabi-v3/utils/metrics"
@@ -266,4 +267,33 @@ func recoverAndLog() {
 		fmt.Printf("Panic recovered: %s\n", e)
 		debug.PrintStack()
 	}
+}
+
+func makeSignerForBlock(k *keeper.Keeper, ctxProvider func(int64) sdk.Context, height int64, blockTime int64) ethtypes.Signer {
+	ctx := ctxProvider(height)
+	chainConfig := types.DefaultChainConfig().EthereumConfig(k.ChainID(ctx))
+	return ethtypes.MakeSigner(chainConfig, big.NewInt(height), uint64(blockTime))
+}
+
+func recoverEVMSenderWithContext(ctx sdk.Context, tx *ethtypes.Transaction, k *keeper.Keeper) (common.Address, error) {
+	chainID := k.ChainID(ctx)
+	signer := ethtypes.LatestSignerForChainID(chainID)
+	return recoverSenderWithFallback(tx, signer)
+}
+
+func recoverSenderWithFallback(tx *ethtypes.Transaction, signer ethtypes.Signer) (common.Address, error) {
+	from, err := ethtypes.Sender(signer, tx)
+	if err == nil {
+		return from, nil
+	}
+	if tx.Type() == ethtypes.LegacyTxType && !tx.Protected() {
+		if from, err := ethtypes.Sender(ethtypes.HomesteadSigner{}, tx); err == nil {
+			return from, nil
+		}
+		if from, err := ethtypes.Sender(ethtypes.FrontierSigner{}, tx); err == nil {
+			return from, nil
+		}
+	}
+	return common.Address{}, fmt.Errorf("sender recovery failed: txType=%d, protected=%v, chainID=%v, originalErr=%w",
+		tx.Type(), tx.Protected(), tx.ChainId(), err)
 }

@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -338,7 +339,8 @@ type App struct {
 
 	configurator module.Configurator
 
-	optimisticProcessingInfo *OptimisticProcessingInfo
+	optimisticProcessingInfo      *OptimisticProcessingInfo
+	optimisticProcessingInfoMutex sync.RWMutex
 
 	// batchVerifier *ante.SR25519BatchVerifier
 	txDecoder         sdk.TxDecoder
@@ -1002,14 +1004,57 @@ func (app *App) PrepareProposalHandler(_ sdk.Context, req *abci.RequestPreparePr
 }
 
 func (app *App) GetOptimisticProcessingInfo() *OptimisticProcessingInfo {
+	app.optimisticProcessingInfoMutex.RLock()
+	defer app.optimisticProcessingInfoMutex.RUnlock()
 	return app.optimisticProcessingInfo
 }
 
 func (app *App) ClearOptimisticProcessingInfo() {
+	app.optimisticProcessingInfoMutex.Lock()
+	defer app.optimisticProcessingInfoMutex.Unlock()
 	app.optimisticProcessingInfo = nil
 }
 
-func (app *App) ProcessProposalHandler(ctx sdk.Context, req *abci.RequestProcessProposal) (*abci.ResponseProcessProposal, error) {
+func signalCompletion(ch chan struct{}) {
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- struct{}{}:
+	default:
+	}
+}
+
+func (app *App) optimisticAbortLocked() {
+	app.optimisticProcessingInfoMutex.Lock()
+	defer app.optimisticProcessingInfoMutex.Unlock()
+	info := app.optimisticProcessingInfo
+	if info == nil {
+		return
+	}
+	info.Aborted = true
+	signalCompletion(info.Completion)
+}
+
+func (app *App) optimisticCommitLocked(events []abci.Event, txRes []*abci.ExecTxResult, endBlockResp abci.ResponseEndBlock, processErr error) {
+	app.optimisticProcessingInfoMutex.Lock()
+	defer app.optimisticProcessingInfoMutex.Unlock()
+	info := app.optimisticProcessingInfo
+	if info == nil {
+		return
+	}
+	if processErr != nil {
+		app.Logger().Info("ProcessBlock failed in optimistic processing", "error", processErr)
+		info.Aborted = true
+	} else {
+		info.Events = events
+		info.TxRes = txRes
+		info.EndBlockResp = endBlockResp
+	}
+	signalCompletion(info.Completion)
+}
+
+func (app *App) ProcessProposalHandler(ctx sdk.Context, req *abci.RequestProcessProposal) (resp *abci.ResponseProcessProposal, err error) {
 	// TODO: this check decodes transactions which is redone in subsequent processing. We might be able to optimize performance
 	// by recording the decoding results and avoid decoding again later on.
 
@@ -1019,47 +1064,86 @@ func (app *App) ProcessProposalHandler(ctx sdk.Context, req *abci.RequestProcess
 			Status: abci.ResponseProcessProposal_REJECT,
 		}, nil
 	}
-	if app.optimisticProcessingInfo == nil {
+
+	app.optimisticProcessingInfoMutex.Lock()
+	shouldStartOptimisticProcessing := app.optimisticProcessingInfo == nil
+	if shouldStartOptimisticProcessing {
 		completionSignal := make(chan struct{}, 1)
-		optimisticProcessingInfo := &OptimisticProcessingInfo{
+		app.optimisticProcessingInfo = &OptimisticProcessingInfo{
 			Height:     req.Height,
 			Hash:       req.Hash,
 			Completion: completionSignal,
 		}
-		app.optimisticProcessingInfo = optimisticProcessingInfo
+	}
+	app.optimisticProcessingInfoMutex.Unlock()
 
+	if shouldStartOptimisticProcessing {
 		plan, found := app.UpgradeKeeper.GetUpgradePlan(ctx)
 		if found && plan.ShouldExecute(ctx) {
 			app.Logger().Info(fmt.Sprintf("Potential upgrade planned for height=%d skipping optimistic processing", plan.Height))
-			app.optimisticProcessingInfo.Aborted = true
-			app.optimisticProcessingInfo.Completion <- struct{}{}
+			app.optimisticAbortLocked()
 		} else {
 			go func() {
-				events, txResults, endBlockResp, _ := app.ProcessBlock(ctx, req.Txs, req, req.ProposedLastCommit, false)
-				optimisticProcessingInfo.Events = events
-				optimisticProcessingInfo.TxRes = txResults
-				optimisticProcessingInfo.EndBlockResp = endBlockResp
-				optimisticProcessingInfo.Completion <- struct{}{}
+				defer func() {
+					if r := recover(); r != nil {
+						app.Logger().Error("panic in optimistic processing goroutine", "error", r, "stack", string(debug.Stack()))
+						app.optimisticAbortLocked()
+					}
+				}()
+				events, txResults, endBlockResp, processErr := app.ProcessBlock(ctx, req.Txs, req, req.ProposedLastCommit, false)
+				app.optimisticCommitLocked(events, txResults, endBlockResp, processErr)
 			}()
 		}
-	} else if !bytes.Equal(app.optimisticProcessingInfo.Hash, req.Hash) {
-		app.optimisticProcessingInfo.Aborted = true
+	} else {
+		app.optimisticProcessingInfoMutex.Lock()
+		if !bytes.Equal(app.optimisticProcessingInfo.Hash, req.Hash) {
+			app.optimisticProcessingInfo.Aborted = true
+		}
+		app.optimisticProcessingInfoMutex.Unlock()
 	}
-	return &abci.ResponseProcessProposal{
+
+	resp = &abci.ResponseProcessProposal{
 		Status: abci.ResponseProcessProposal_ACCEPT,
-	}, nil
+	}
+	return resp, nil
 }
 
-func (app *App) FinalizeBlocker(ctx sdk.Context, req *abci.RequestFinalizeBlock) (*abci.ResponseFinalizeBlock, error) {
+func (app *App) FinalizeBlocker(ctx sdk.Context, req *abci.RequestFinalizeBlock) (resp *abci.ResponseFinalizeBlock, err error) {
 	startTime := time.Now()
 	defer func() {
+		defer func() {
+			if cleanupPanic := recover(); cleanupPanic != nil {
+				ctx.Logger().Error("panic in FinalizeBlocker cleanup", "error", cleanupPanic)
+			}
+		}()
 		app.ClearOptimisticProcessingInfo()
 		duration := time.Since(startTime)
 		ctx.Logger().Info(fmt.Sprintf("FinalizeBlock took %dms", duration/time.Millisecond))
 	}()
-	if app.optimisticProcessingInfo != nil {
-		<-app.optimisticProcessingInfo.Completion
-		if !app.optimisticProcessingInfo.Aborted && bytes.Equal(app.optimisticProcessingInfo.Hash, req.Hash) {
+	defer func() {
+		if r := recover(); r != nil {
+			ctx.Logger().Error("panic in FinalizeBlocker", "error", r, "stack", string(debug.Stack()))
+			resp = nil
+			err = fmt.Errorf("FinalizeBlocker panic: %v", r)
+		}
+	}()
+
+	app.optimisticProcessingInfoMutex.RLock()
+	completion := app.optimisticProcessingInfo
+	app.optimisticProcessingInfoMutex.RUnlock()
+
+	if completion != nil && completion.Completion != nil {
+		<-completion.Completion
+
+		app.optimisticProcessingInfoMutex.RLock()
+		aborted := app.optimisticProcessingInfo.Aborted
+		finalHash := app.optimisticProcessingInfo.Hash
+		events := app.optimisticProcessingInfo.Events
+		txRes := app.optimisticProcessingInfo.TxRes
+		endBlockResp := app.optimisticProcessingInfo.EndBlockResp
+		app.optimisticProcessingInfoMutex.RUnlock()
+
+		if !aborted && bytes.Equal(finalHash, req.Hash) {
 			metrics.IncrementOptimisticProcessingCounter(true)
 			app.SetProcessProposalStateToCommit()
 			if app.EvmKeeper.EthReplayConfig.Enabled || app.EvmKeeper.EthBlockTestConfig.Enabled {
@@ -1068,13 +1152,17 @@ func (app *App) FinalizeBlocker(ctx sdk.Context, req *abci.RequestFinalizeBlock)
 			cms := app.WriteState()
 			app.LightInvarianceChecks(cms, app.lightInvarianceConfig)
 			appHash := app.GetWorkingHash()
-			resp := app.getFinalizeBlockResponse(appHash, app.optimisticProcessingInfo.Events, app.optimisticProcessingInfo.TxRes, app.optimisticProcessingInfo.EndBlockResp)
+			resp := app.getFinalizeBlockResponse(appHash, events, txRes, endBlockResp)
 			return &resp, nil
 		}
 	}
 	metrics.IncrementOptimisticProcessingCounter(false)
 	ctx.Logger().Info("optimistic processing ineligible")
-	events, txResults, endBlockResp, _ := app.ProcessBlock(ctx, req.Txs, req, req.DecidedLastCommit, false)
+	events, txResults, endBlockResp, processErr := app.ProcessBlock(ctx, req.Txs, req, req.DecidedLastCommit, false)
+	if processErr != nil {
+		ctx.Logger().Error("ProcessBlock failed in FinalizeBlocker", "error", processErr)
+		return nil, processErr
+	}
 
 	app.SetDeliverStateToCommit()
 	if app.EvmKeeper.EthReplayConfig.Enabled || app.EvmKeeper.EthBlockTestConfig.Enabled {
@@ -1083,8 +1171,8 @@ func (app *App) FinalizeBlocker(ctx sdk.Context, req *abci.RequestFinalizeBlock)
 	cms := app.WriteState()
 	app.LightInvarianceChecks(cms, app.lightInvarianceConfig)
 	appHash := app.GetWorkingHash()
-	resp := app.getFinalizeBlockResponse(appHash, events, txResults, endBlockResp)
-	return &resp, nil
+	finalResp := app.getFinalizeBlockResponse(appHash, events, txResults, endBlockResp)
+	return &finalResp, nil
 }
 
 func (app *App) DeliverTxWithResult(ctx sdk.Context, tx []byte, typedTx sdk.Tx) *abci.ExecTxResult {
@@ -1773,7 +1861,14 @@ func RegisterSwaggerAPI(rtr *mux.Router) {
 // checkTotalBlockGas checks that the block gas limit is not exceeded by our best estimate of
 // the total gas by the txs in the block. The gas of a tx is either the gas estimate if it's an EVM tx,
 // or the gas wanted if it's a Cosmos tx.
-func (app *App) checkTotalBlockGas(ctx sdk.Context, txs [][]byte) bool {
+func (app *App) checkTotalBlockGas(ctx sdk.Context, txs [][]byte) (result bool) {
+	defer func() {
+		if r := recover(); r != nil {
+			ctx.Logger().Error("panic recovered in checkTotalBlockGas", "panic", r)
+			result = false // Reject proposal if panic occurs
+		}
+	}()
+
 	totalGas, totalGasWanted := uint64(0), uint64(0)
 	nonzeroTxsCnt := 0
 	for _, tx := range txs {
@@ -1826,9 +1921,15 @@ func (app *App) checkTotalBlockGas(ctx sdk.Context, txs [][]byte) bool {
 
 		totalGasWanted += gasWanted
 
-		// If the gas estimate is set and at least 21k (the minimum gas needed for an EVM tx), use the gas estimate.
-		// Otherwise, use the gas wanted. Typically the gas estimate is set for EVM txs and not set for Cosmos txs.
+		// If the gas estimate is set and at least 21k (the minimum gas needed for an EVM tx)
+		// and less than or equal to the tx gas limit, use the gas estimate. Otherwise, use gasWanted.
+		useEstimate := false
 		if decodedTx.GetGasEstimate() >= MinGasEVMTx {
+			if decodedTx.GetGasEstimate() <= gasWanted {
+				useEstimate = true
+			}
+		}
+		if useEstimate {
 			totalGas += decodedTx.GetGasEstimate()
 		} else {
 			totalGas += gasWanted

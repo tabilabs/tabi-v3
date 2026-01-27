@@ -17,6 +17,7 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/lib/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/tabilabs/tabi-v3/x/evm/keeper"
 	"github.com/tabilabs/tabi-v3/x/evm/types"
@@ -62,23 +63,11 @@ func NewTabiTransactionAPI(
 }
 
 func (t *TabiTransactionAPI) GetTransactionReceiptExcludeTraceFail(ctx context.Context, hash common.Hash) (result map[string]interface{}, returnErr error) {
-	sdkCtx := t.ctxProvider(LatestCtxHeight)
-	signer := ethtypes.MakeSigner(
-		types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(sdkCtx)),
-		big.NewInt(sdkCtx.BlockHeight()),
-		uint64(sdkCtx.BlockTime().Unix()),
-	)
-	return getTransactionReceipt(ctx, t.TransactionAPI, hash, true, t.isPanicTx, true, signer)
+	return getTransactionReceipt(ctx, t.TransactionAPI, hash, true, t.isPanicTx, true)
 }
 
 func (t *TransactionAPI) GetTransactionReceipt(ctx context.Context, hash common.Hash) (result map[string]interface{}, returnErr error) {
-	sdkCtx := t.ctxProvider(LatestCtxHeight)
-	signer := ethtypes.MakeSigner(
-		types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(sdkCtx)),
-		big.NewInt(sdkCtx.BlockHeight()),
-		uint64(sdkCtx.BlockTime().Unix()),
-	)
-	return getTransactionReceipt(ctx, t, hash, false, nil, false, signer)
+	return getTransactionReceipt(ctx, t, hash, false, nil, false)
 }
 
 func getTransactionReceipt(
@@ -88,7 +77,6 @@ func getTransactionReceipt(
 	excludePanicTxs bool,
 	isPanicTx func(ctx context.Context, hash common.Hash) (bool, error),
 	includeSynthetic bool,
-	signer ethtypes.Signer,
 ) (result map[string]interface{}, returnErr error) {
 	startTime := time.Now()
 	defer recordMetrics("eth_getTransactionReceipt", t.connectionType, startTime, returnErr == nil)
@@ -107,43 +95,35 @@ func getTransactionReceipt(
 	receipt, err := t.keeper.GetReceipt(sdkctx, hash)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			// When the transaction doesn't exist, the RPC method should return JSON null
-			// as per specification.
 			return nil, nil
 		}
 		return nil, err
 	}
-	// Fill in the receipt if the transaction has failed and used 0 gas
-	// This case is for when a tx fails before it makes it to the VM
-	if receipt.Status == 0 && receipt.GasUsed == 0 {
-		// Get the block
-		height := int64(receipt.BlockNumber)
-		block, err := blockByNumberWithRetry(ctx, t.tmClient, &height, 1)
-		if err != nil {
-			return nil, err
-		}
 
-		// Find the transaction in the block
+	height := int64(receipt.BlockNumber)
+	block, err := blockByNumberWithRetry(ctx, t.tmClient, &height, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	signer := makeSignerForBlock(t.keeper, t.ctxProvider, height, block.Block.Time.Unix())
+
+	if receipt.Status == 0 && receipt.GasUsed == 0 {
 		for _, tx := range block.Block.Txs {
 			etx := getEthTxForTxBz(tx, t.txConfigProvider(block.Block.Height).TxDecoder())
 			if etx != nil && etx.Hash() == hash {
-				// Get the signer
-				signer := ethtypes.MakeSigner(
-					types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(sdkctx)),
-					big.NewInt(height),
-					uint64(block.Block.Time.Unix()),
-				)
-				from, _ := ethtypes.Sender(signer, etx)
-
-				// Update receipt with correct information
-				receipt.From = from.Hex()
-				if etx.To() != nil {
-					receipt.To = etx.To().Hex()
-					receipt.ContractAddress = ""
+				from, err := recoverSenderWithFallback(etx, signer)
+				if err == nil {
+					receipt.From = from.Hex()
+					if etx.To() != nil {
+						receipt.To = etx.To().Hex()
+						receipt.ContractAddress = ""
+					} else {
+						receipt.To = ""
+						receipt.ContractAddress = crypto.CreateAddress(from, etx.Nonce()).Hex()
+					}
 				} else {
-					receipt.To = ""
-					// For contract creation transactions, calculate the contract address
-					receipt.ContractAddress = crypto.CreateAddress(from, etx.Nonce()).Hex()
+					log.Warn("sender recovery failed after all fallbacks", "txHash", hash.Hex(), "height", height, "txType", etx.Type(), "protected", etx.Protected(), "chainID", etx.ChainId(), "error", err)
 				}
 				receipt.TxType = uint32(etx.Type())
 				receipt.Status = uint32(ethtypes.ReceiptStatusFailed)
@@ -152,11 +132,7 @@ func getTransactionReceipt(
 			}
 		}
 	}
-	height := int64(receipt.BlockNumber)
-	block, err := blockByNumberWithRetry(ctx, t.tmClient, &height, 1)
-	if err != nil {
-		return nil, err
-	}
+
 	return encodeReceipt(receipt, t.txConfigProvider(height).TxDecoder(), block, func(h common.Hash) *types.Receipt {
 		r, err := t.keeper.GetReceipt(sdkctx, h)
 		if err != nil {
@@ -213,12 +189,11 @@ func (t *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 		for _, tx := range res.Txs {
 			etx := getEthTxForTxBz(tx, t.txConfigProvider(LatestCtxHeight).TxDecoder())
 			if etx != nil && etx.Hash() == hash {
-				signer := ethtypes.MakeSigner(
-					types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(sdkCtx)),
-					big.NewInt(sdkCtx.BlockHeight()),
-					uint64(sdkCtx.BlockTime().Unix()),
-				)
-				from, _ := ethtypes.Sender(signer, etx)
+				from, err := recoverEVMSenderWithContext(sdkCtx, etx, t.keeper)
+				if err != nil {
+					sdkCtx.Logger().Error("failed to recover sender", "err", err, "tx", etx.Hash().Hex())
+					return nil, err
+				}
 				v, r, s := etx.RawSignatureValues()
 				res := ethapi.RPCTransaction{
 					Type:     hexutil.Uint64(etx.Type()),
@@ -307,7 +282,7 @@ func (t *TransactionAPI) getTransactionWithBlock(block *coretypes.ResultBlock, i
 	blockHash := common.HexToHash(block.BlockID.Hash.String())
 	blockNumber := uint64(block.Block.Height)
 	blockTime := block.Block.Time
-	res := ethapi.NewRPCTransaction(ethtx, blockHash, blockNumber, uint64(blockTime.Second()), uint64(receipt.TransactionIndex), baseFeePerGas, chainConfig)
+	res := ethapi.NewRPCTransaction(ethtx, blockHash, blockNumber, uint64(blockTime.Unix()), uint64(receipt.TransactionIndex), baseFeePerGas, chainConfig)
 	return res, nil
 }
 
@@ -431,7 +406,7 @@ func encodeReceipt(receipt *types.Receipt, decoder sdk.TxDecoder, block *coretyp
 		"status":            hexutil.Uint(receipt.Status),
 	}
 	if etx != nil && receipt.From == "" {
-		from, err := ethtypes.Sender(signer, etx)
+		from, err := recoverSenderWithFallback(etx, signer)
 		if err == nil {
 			fields["from"] = from
 		}

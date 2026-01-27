@@ -10,6 +10,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/lib/ethapi"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/tabilabs/tabi-v3/x/evm/keeper"
 	"github.com/tabilabs/tabi-v3/x/evm/types"
 	rpcclient "github.com/tendermint/tendermint/rpc/client"
@@ -59,9 +60,10 @@ func (t *TxPoolAPI) Content(ctx context.Context) (result map[string]map[string]m
 		if ethTx == nil { // not an evm tx
 			continue
 		}
-		fromAddr, err := ethtypes.Sender(signer, ethTx)
+		fromAddr, err := recoverSenderWithFallback(ethTx, signer)
 		if err != nil {
-			return nil, err
+			log.Warn("sender recovery failed in txpool", "txHash", ethTx.Hash().Hex(), "txType", ethTx.Type(), "protected", ethTx.Protected(), "chainID", ethTx.ChainId(), "error", err)
+			continue
 		}
 
 		nonce := ethTx.Nonce()

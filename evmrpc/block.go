@@ -229,12 +229,7 @@ func (a *BlockAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rpc.Block
 	wg := sync.WaitGroup{}
 	mtx := sync.Mutex{}
 	allReceipts := make([]map[string]interface{}, len(txHashes))
-	sdkCtx := a.ctxProvider(LatestCtxHeight)
-	signer := ethtypes.MakeSigner(
-		types.DefaultChainConfig().EthereumConfig(a.keeper.ChainID(sdkCtx)),
-		big.NewInt(sdkCtx.BlockHeight()),
-		uint64(sdkCtx.BlockTime().Unix()),
-	)
+	signer := makeSignerForBlock(a.keeper, a.ctxProvider, height, block.Block.Time.Unix())
 	for i, hash := range txHashes {
 		wg.Add(1)
 		go func(i int, hash common.Hash) {
@@ -314,12 +309,11 @@ func EncodeTmBlock(
 	resultHash := common.HexToHash(block.Block.LastResultsHash.String())
 	miner := common.HexToAddress(block.Block.ProposerAddress.String())
 	baseFeePerGas := k.GetCurrBaseFeePerGas(ctx).TruncateInt().BigInt()
-	var blockGasUsed int64
+	var blockGasUsed uint64
 	chainConfig := types.DefaultChainConfig().EthereumConfig(k.ChainID(ctx))
 	transactions := []interface{}{}
 
-	for i, txRes := range blockRes.TxsResults {
-		blockGasUsed += txRes.GasUsed
+	for i, _ := range blockRes.TxsResults {
 		decoded, err := txDecoder(block.Block.Txs[i])
 		if err != nil {
 			return nil, errors.New("failed to decode transaction")
@@ -348,10 +342,11 @@ func EncodeTmBlock(
 				if !includeSyntheticTxs && receipt.TxType == ShellEVMTxType {
 					continue
 				}
+				blockGasUsed += receipt.GasUsed
 				if !fullTx {
 					transactions = append(transactions, hash)
 				} else {
-					newTx := ethapi.NewRPCTransaction(ethtx, blockhash, number.Uint64(), uint64(blockTime.Second()), uint64(len(transactions)), baseFeePerGas, chainConfig)
+					newTx := ethapi.NewRPCTransaction(ethtx, blockhash, number.Uint64(), uint64(blockTime.Unix()), uint64(len(transactions)), baseFeePerGas, chainConfig)
 					transactions = append(transactions, newTx)
 				}
 			case *wasmtypes.MsgExecuteContract:

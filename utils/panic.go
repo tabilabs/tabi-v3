@@ -32,7 +32,14 @@ func LogPanicCallback(ctx sdk.Context, r any) func(any) {
 	}
 }
 
+// Deprecated: MetricsPanicCallback is no longer used. Retained for potential future use.
 func MetricsPanicCallback(err any, ctx sdk.Context, key string) {
+	defer func() {
+		if e := recover(); e != nil {
+			// Use fmt as fallback to avoid silent failure
+			fmt.Printf("secondary panic in MetricsPanicCallback: %v\n", e)
+		}
+	}()
 	ctx.Logger().Error(fmt.Sprintf("panic %s occurred during order matching for: %s", err, key))
 	telemetry.IncrCounterWithLabels(
 		[]string{"panic"},
