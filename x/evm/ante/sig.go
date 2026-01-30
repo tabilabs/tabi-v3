@@ -5,6 +5,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	abci "github.com/tendermint/tendermint/abci/types"
 	tmtypes "github.com/tendermint/tendermint/types"
@@ -94,9 +95,9 @@ func (svd *EVMSigVerifyDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulat
 					// this nonce has already been mined, we cannot accept it again
 					return abci.Rejected
 				} else if txNonce < nextPendingNonce {
-					// this nonce is allowed to process as it is part of the
-					// consecutive nonces from nextNonceToBeMined to nextPendingNonce
-					// This logic allows multiple nonces from an account to be processed in a block.
+					if !hasSufficientBalance(svd.evmKeeper, latestCtx, evmAddr, ethTx) {
+						return abci.Pending
+					}
 					return abci.Accepted
 				}
 				return abci.Pending
@@ -107,4 +108,12 @@ func (svd *EVMSigVerifyDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulat
 	}
 
 	return next(ctx, tx, simulate)
+}
+
+func hasSufficientBalance(k *evmkeeper.Keeper, ctx sdk.Context, evmAddr common.Address, tx *ethtypes.Transaction) bool {
+	senderTabiAddr := k.GetTabiAddressOrDefault(ctx, evmAddr)
+	// keeper.GetBalance returns wei-denominated balance: (unlocked atabi * 1e18) + wei.
+	balanceWei := k.GetBalance(ctx, senderTabiAddr)
+	maxCostWei := tx.Cost() // includes gas + blobGas (if any) + value
+	return balanceWei.Cmp(maxCostWei) >= 0
 }
