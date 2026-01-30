@@ -23,6 +23,25 @@ var StoreKeyToResourceTypePrefixMap = aclsdktypes.StoreKeyToResourceTypePrefixMa
 		aclsdktypes.ResourceType_ANY: aclsdktypes.EmptyPrefix,
 		aclsdktypes.ResourceType_KV:  aclsdktypes.EmptyPrefix,
 		aclsdktypes.ResourceType_Mem: aclsdktypes.EmptyPrefix,
+		// NOTE: this chain does not include an epoch module, but the accesscontrol
+		// resource tree defines KV_EPOCH. Map it to the parent node as a safe
+		// fallback to keep resource mappings exhaustive.
+		aclsdktypes.ResourceType_KV_EPOCH: aclsdktypes.EmptyPrefix,
+		// NOTE: this chain does not include oracle/tokenfactory modules, but the
+		// accesscontrol resource tree defines these resource types. Map them to the
+		// parent node as a safe fallback to keep resource mappings exhaustive.
+		aclsdktypes.ResourceType_KV_ORACLE:                      aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_ORACLE_AGGREGATE_VOTES:      aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_ORACLE_VOTE_TARGETS:         aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_ORACLE_FEEDERS:              aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_ORACLE_EXCHANGE_RATE:        aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_ORACLE_VOTE_PENALTY_COUNTER: aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_ORACLE_PRICE_SNAPSHOT:       aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_TOKENFACTORY:                aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_TOKENFACTORY_DENOM:          aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_TOKENFACTORY_METADATA:       aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_TOKENFACTORY_ADMIN:          aclsdktypes.EmptyPrefix,
+		aclsdktypes.ResourceType_KV_TOKENFACTORY_CREATOR:        aclsdktypes.EmptyPrefix,
 	},
 	banktypes.StoreKey: {
 		aclsdktypes.ResourceType_KV_BANK:             aclsdktypes.EmptyPrefix,
@@ -175,6 +194,23 @@ var ResourceTypeToStoreKeyMap = aclsdktypes.ResourceTypeToStoreKeyMap{
 	aclsdktypes.ResourceType_KV_SLASHING_ADDR_PUBKEY_RELATION_KEY: slashingtypes.StoreKey,
 
 	// ~~~~ EPOCH Resource Types ~~~~
+	aclsdktypes.ResourceType_KV_EPOCH: aclsdktypes.ParentNodeKey,
+
+	// ~~~~ ORACLE Resource Types ~~~~
+	aclsdktypes.ResourceType_KV_ORACLE:                      aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_ORACLE_AGGREGATE_VOTES:      aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_ORACLE_VOTE_TARGETS:         aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_ORACLE_FEEDERS:              aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_ORACLE_EXCHANGE_RATE:        aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_ORACLE_VOTE_PENALTY_COUNTER: aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_ORACLE_PRICE_SNAPSHOT:       aclsdktypes.ParentNodeKey,
+
+	// ~~~~ TOKENFACTORY Resource Types ~~~~
+	aclsdktypes.ResourceType_KV_TOKENFACTORY:          aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_TOKENFACTORY_DENOM:    aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_TOKENFACTORY_METADATA: aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_TOKENFACTORY_ADMIN:    aclsdktypes.ParentNodeKey,
+	aclsdktypes.ResourceType_KV_TOKENFACTORY_CREATOR:  aclsdktypes.ParentNodeKey,
 
 	// ~~~~ ACCESSCONTROL Resource Types ~~~~
 	aclsdktypes.ResourceType_KV_ACCESSCONTROL:                         acltypes.StoreKey,
