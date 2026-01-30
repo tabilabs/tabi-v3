@@ -301,7 +301,7 @@ func (t *TransactionAPI) getTransactionWithBlockCosmosIndex(block *coretypes.Res
 		return nil, err
 	}
 	height := int64(receipt.BlockNumber)
-	baseFeePerGas := t.keeper.GetBaseFee(t.ctxProvider(height))
+	baseFeePerGas := t.keeper.GetCurrBaseFeePerGas(t.ctxProvider(height)).TruncateInt().BigInt()
 	chainConfig := types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(t.ctxProvider(height)))
 	blockHash := common.HexToHash(block.BlockID.Hash.String())
 	blockNumber := uint64(block.Block.Height)
@@ -324,7 +324,7 @@ func (t *TransactionAPI) getTransactionWithBlock(block *coretypes.ResultBlock, e
 				return nil, err
 			}
 			height := int64(receipt.BlockNumber)
-			baseFeePerGas := t.keeper.GetBaseFee(t.ctxProvider(height))
+			baseFeePerGas := t.keeper.GetCurrBaseFeePerGas(t.ctxProvider(height)).TruncateInt().BigInt()
 			chainConfig := types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(t.ctxProvider(height)))
 			blockHash := common.HexToHash(block.BlockID.Hash.String())
 			blockNumber := uint64(block.Block.Height)
@@ -351,7 +351,7 @@ func (t *TransactionAPI) getTransactionByHashFromBlock(ctx context.Context, hash
 			continue
 		}
 		if ethtx.Hash() == hash {
-			baseFeePerGas := t.keeper.GetBaseFee(t.ctxProvider(height))
+			baseFeePerGas := t.keeper.GetCurrBaseFeePerGas(t.ctxProvider(height)).TruncateInt().BigInt()
 			chainConfig := types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(t.ctxProvider(height)))
 			blockHash := common.HexToHash(block.BlockID.Hash.String())
 			blockNumber := uint64(block.Block.Height)
