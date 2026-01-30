@@ -244,11 +244,23 @@ func SetCoinsMinted(amount uint64, denom string) {
 //
 //	tabi_tx_gas_counter
 func IncrGasCounter(gasType string, value int64) {
-	telemetry.IncrCounterWithLabels(
-		[]string{"tabi", "tx", "gas", "counter"},
-		float32(value),
-		[]metrics.Label{telemetry.NewLabel("type", gasType)},
-	)
+	if value <= 0 {
+		return
+	}
+	const maxFloat32Safe int64 = 16777216
+	const maxIterations = 100
+	for i := 0; value > 0 && i < maxIterations; i++ {
+		incr := value
+		if incr > maxFloat32Safe {
+			incr = maxFloat32Safe
+		}
+		telemetry.IncrCounterWithLabels(
+			[]string{"tabi", "tx", "gas", "counter"},
+			float32(incr),
+			[]metrics.Label{telemetry.NewLabel("type", gasType)},
+		)
+		value -= incr
+	}
 }
 
 // Measures the number of times optimistic processing runs
