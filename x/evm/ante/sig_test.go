@@ -137,6 +137,12 @@ func TestSigVerifyPendingTransaction(t *testing.T) {
 	})
 	require.Nil(t, err)
 
+	// Fund the sender to isolate pending nonce behavior from balance checks.
+	senderTabiAddr := k.GetTabiAddressOrDefault(ctx, evmAddr)
+	funds := sdk.NewCoins(sdk.NewCoin(k.GetBaseDenom(ctx), sdk.NewInt(1_000_000_000_000)))
+	require.NoError(t, k.BankKeeper().MintCoins(ctx, types.ModuleName, funds))
+	require.NoError(t, k.BankKeeper().SendCoinsFromModuleToAccount(ctx, types.ModuleName, senderTabiAddr, funds))
+
 	// should not return error but include pending tx checker
 	newCtx, err := handler.AnteHandle(ctx, mockTx{msgs: []sdk.Msg{msg}}, false, func(ctx sdk.Context, _ sdk.Tx, _ bool) (sdk.Context, error) {
 		return ctx, nil
