@@ -65,7 +65,11 @@ func NewSubscriptionAPI(tmClient rpcclient.Client, k *keeper.Keeper, ctxProvider
 			eventHeader := res.Data.(tmtypes.EventDataNewBlockHeader)
 			ctx := ctxProvider(eventHeader.Header.Height)
 			baseFeePerGas := k.GetCurrBaseFeePerGas(ctx).TruncateInt().BigInt()
-			ethHeader, err := encodeTmHeader(eventHeader, baseFeePerGas)
+			gasLimit := uint64(keeper.DefaultBlockGasLimit)
+			if cp := ctx.ConsensusParams(); cp != nil && cp.Block != nil && cp.Block.MaxGas > 0 {
+				gasLimit = uint64(cp.Block.MaxGas)
+			}
+			ethHeader, err := encodeTmHeader(eventHeader, baseFeePerGas, gasLimit)
 			if err != nil {
 				fmt.Printf("error encoding new head event %#v due to %s\n", res.Data, err)
 				continue
@@ -270,6 +274,7 @@ func (s *SubscriptionManager) Unsubscribe(ctx context.Context, id SubscriberID) 
 func encodeTmHeader(
 	header tmtypes.EventDataNewBlockHeader,
 	baseFee *big.Int,
+	gasLimit uint64,
 ) (map[string]interface{}, error) {
 	blockHash := common.HexToHash(header.Header.Hash().String())
 	number := big.NewInt(header.Header.Height)
@@ -282,7 +287,6 @@ func encodeTmHeader(
 	for _, txRes := range header.ResultFinalizeBlock.TxResults {
 		gasWanted += txRes.GasUsed
 	}
-	gasLimit := uint64(header.ResultFinalizeBlock.ConsensusParamUpdates.Block.MaxGas)
 	result := map[string]interface{}{
 		"difficulty":            (*hexutil.Big)(utils.Big0), // inapplicable to Tabi
 		"extraData":             hexutil.Bytes{},            // inapplicable to Tabi

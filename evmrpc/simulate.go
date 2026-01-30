@@ -497,11 +497,18 @@ func (b *Backend) getBlockHeight(ctx context.Context, blockNrOrHash rpc.BlockNum
 
 func (b *Backend) getHeader(blockNumber *big.Int) *ethtypes.Header {
 	zeroExcessBlobGas := uint64(0)
+	ctx := b.ctxProvider(blockNumber.Int64())
+	var gasLimit uint64
+	if ctx.ConsensusParams() != nil && ctx.ConsensusParams().Block != nil && ctx.ConsensusParams().Block.MaxGas > 0 {
+		gasLimit = uint64(ctx.ConsensusParams().Block.MaxGas)
+	} else {
+		gasLimit = keeper.DefaultBlockGasLimit
+	}
 	header := &ethtypes.Header{
 		Difficulty:    common.Big0,
 		Number:        blockNumber,
 		BaseFee:       nil,
-		GasLimit:      b.config.GasCap,
+		GasLimit:      gasLimit,
 		Time:          uint64(time.Now().Unix()),
 		ExcessBlobGas: &zeroExcessBlobGas,
 	}
