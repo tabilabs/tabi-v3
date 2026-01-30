@@ -7,8 +7,9 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-// AtabiToWeiMultiplier Fields that were denominated in atabi will be converted to swei (1atabi = 10^12swei)
-// for existing Ethereum application (which assumes 18 decimal points) to display properly.
+// AtabiToWeiMultiplier converts atabi amounts to wei.
+//
+// On this chain, atabi == wei.
 var AtabiToWeiMultiplier = big.NewInt(1)
 var SdkAtabiToWeiMultiplier = sdk.NewIntFromBigInt(AtabiToWeiMultiplier)
 
