@@ -419,7 +419,7 @@ func EncodeTmBlock(
 	var gasLimit int64
 	if cp := ctx.ConsensusParams(); cp != nil && cp.Block != nil && cp.Block.MaxGas > 0 {
 		gasLimit = cp.Block.MaxGas
-	} else if blockRes != nil && blockRes.ConsensusParamUpdates.Block != nil && blockRes.ConsensusParamUpdates.Block.MaxGas > 0 {
+	} else if blockRes != nil && blockRes.ConsensusParamUpdates != nil && blockRes.ConsensusParamUpdates.Block != nil && blockRes.ConsensusParamUpdates.Block.MaxGas > 0 {
 		gasLimit = blockRes.ConsensusParamUpdates.Block.MaxGas
 	} else {
 		gasLimit = keeper.DefaultBlockGasLimit
