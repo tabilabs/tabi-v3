@@ -48,3 +48,46 @@ func TestGetReceiptWithRetry(t *testing.T) {
 	require.Nil(t, err)
 	require.Equal(t, txHash.Hex(), r.TxHashHex)
 }
+
+func TestFlushTransientReceipts_CumulativeGasUsedOrdersByTransactionIndex(t *testing.T) {
+	k, ctx := testkeeper.MockEVMKeeper()
+
+	// Use hashes with lexicographic ordering opposite to TransactionIndex to
+	// ensure ordering is not derived from txHash iteration order.
+	txHash0 := common.HexToHash("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0")
+	txHash1 := common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000001")
+
+	height := uint64(ctx.BlockHeight())
+
+	// txIndex=0 should have cumulativeGasUsed=100
+	r0 := &types.Receipt{
+		TxHashHex:         txHash0.Hex(),
+		BlockNumber:       height,
+		TransactionIndex:  0,
+		GasUsed:           100,
+		EffectiveGasPrice: 1,
+		Status:            uint32(ethtypes.ReceiptStatusSuccessful),
+	}
+	// txIndex=1 should have cumulativeGasUsed=150
+	r1 := &types.Receipt{
+		TxHashHex:         txHash1.Hex(),
+		BlockNumber:       height,
+		TransactionIndex:  1,
+		GasUsed:           50,
+		EffectiveGasPrice: 1,
+		Status:            uint32(ethtypes.ReceiptStatusSuccessful),
+	}
+
+	// Insert in reverse order to avoid relying on insertion ordering.
+	require.NoError(t, k.SetTransientReceipt(ctx, txHash1, r1))
+	require.NoError(t, k.SetTransientReceipt(ctx, txHash0, r0))
+	require.NoError(t, k.FlushTransientReceipts(ctx))
+
+	got0, err := k.GetReceipt(ctx, txHash0)
+	require.NoError(t, err)
+	got1, err := k.GetReceipt(ctx, txHash1)
+	require.NoError(t, err)
+
+	require.Equal(t, uint64(100), got0.CumulativeGasUsed)
+	require.Equal(t, uint64(150), got1.CumulativeGasUsed)
+}
