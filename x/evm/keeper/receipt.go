@@ -1,8 +1,10 @@
 package keeper
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/cosmos/cosmos-sdk/store/prefix"
@@ -117,22 +119,65 @@ func (k *Keeper) MockReceipt(ctx sdk.Context, txHash common.Hash, receipt *types
 func (k *Keeper) FlushTransientReceipts(ctx sdk.Context) error {
 	iter := prefix.NewStore(ctx.TransientStore(k.transientStoreKey), types.ReceiptKeyPrefix).Iterator(nil, nil)
 	defer iter.Close()
-	var pairs []*iavl.KVPair
-	var changesets []*proto.NamedChangeSet
-	for ; iter.Valid(); iter.Next() {
-		kvPair := &iavl.KVPair{Key: types.ReceiptKey(common.Hash(iter.Key())), Value: iter.Value()}
-		pairs = append(pairs, kvPair)
+
+	type receiptWithKey struct {
+		txHash  common.Hash
+		receipt *types.Receipt
 	}
-	if len(pairs) == 0 {
+	var receipts []receiptWithKey
+
+	for ; iter.Valid(); iter.Next() {
+		r := &types.Receipt{}
+		if err := r.Unmarshal(iter.Value()); err != nil {
+			return err
+		}
+		receipts = append(receipts, receiptWithKey{
+			txHash:  common.BytesToHash(iter.Key()),
+			receipt: r,
+		})
+	}
+
+	if len(receipts) == 0 {
 		return nil
 	}
+
+	blockReceipts := make(map[uint64][]receiptWithKey)
+	for _, r := range receipts {
+		blockReceipts[r.receipt.BlockNumber] = append(blockReceipts[r.receipt.BlockNumber], r)
+	}
+
+	for _, recs := range blockReceipts {
+		sort.Slice(recs, func(i, j int) bool {
+			return recs[i].receipt.TransactionIndex < recs[j].receipt.TransactionIndex
+		})
+		var cumGas uint64
+		for i := range recs {
+			if recs[i].receipt.EffectiveGasPrice > 0 {
+				cumGas += recs[i].receipt.GasUsed
+			}
+			recs[i].receipt.CumulativeGasUsed = cumGas
+		}
+	}
+
+	sort.Slice(receipts, func(i, j int) bool {
+		return bytes.Compare(receipts[i].txHash[:], receipts[j].txHash[:]) < 0
+	})
+
+	var pairs []*iavl.KVPair
+	for _, r := range receipts {
+		bz, err := r.receipt.Marshal()
+		if err != nil {
+			return err
+		}
+		pairs = append(pairs, &iavl.KVPair{Key: types.ReceiptKey(r.txHash), Value: bz})
+	}
+
 	ncs := &proto.NamedChangeSet{
 		Name:      types.ReceiptStoreKey,
 		Changeset: iavl.ChangeSet{Pairs: pairs},
 	}
-	changesets = append(changesets, ncs)
 
-	return k.receiptStore.ApplyChangesetAsync(ctx.BlockHeight(), changesets)
+	return k.receiptStore.ApplyChangesetAsync(ctx.BlockHeight(), []*proto.NamedChangeSet{ncs})
 }
 
 func (k *Keeper) WriteReceipt(

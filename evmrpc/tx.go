@@ -62,6 +62,30 @@ func NewTabiTransactionAPI(
 	return &TabiTransactionAPI{TransactionAPI: NewTransactionAPI(tmClient, k, ctxProvider, txConfigProvider, homeDir, connectionType), isPanicTx: isPanicTx}
 }
 
+func (t *TabiTransactionAPI) GetTransactionByBlockNumberAndIndex(ctx context.Context, blockNr rpc.BlockNumber, index hexutil.Uint) (result *ethapi.RPCTransaction, returnErr error) {
+	startTime := time.Now()
+	defer recordMetrics("eth_getTransactionByBlockNumberAndIndex", t.connectionType, startTime, returnErr == nil)
+	blockNumber, err := getBlockNumber(ctx, t.tmClient, blockNr)
+	if err != nil {
+		return nil, err
+	}
+	block, err := blockByNumberWithRetry(ctx, t.tmClient, blockNumber, 1)
+	if err != nil {
+		return nil, err
+	}
+	return t.getTransactionWithBlockCosmosIndex(block, index)
+}
+
+func (t *TabiTransactionAPI) GetTransactionByBlockHashAndIndex(ctx context.Context, blockHash common.Hash, index hexutil.Uint) (result *ethapi.RPCTransaction, returnErr error) {
+	startTime := time.Now()
+	defer recordMetrics("eth_getTransactionByBlockHashAndIndex", t.connectionType, startTime, returnErr == nil)
+	block, err := blockByHash(ctx, t.tmClient, blockHash[:])
+	if err != nil {
+		return nil, err
+	}
+	return t.getTransactionWithBlockCosmosIndex(block, index)
+}
+
 func (t *TabiTransactionAPI) GetTransactionReceiptExcludeTraceFail(ctx context.Context, hash common.Hash) (result map[string]interface{}, returnErr error) {
 	return getTransactionReceipt(ctx, t.TransactionAPI, hash, true, t.isPanicTx, true)
 }
@@ -222,7 +246,7 @@ func (t *TransactionAPI) GetTransactionByHash(ctx context.Context, hash common.H
 		}
 		return nil, err
 	}
-	return t.GetTransactionByBlockNumberAndIndex(ctx, rpc.BlockNumber(receipt.BlockNumber), hexutil.Uint(receipt.TransactionIndex))
+	return t.getTransactionByHashFromBlock(ctx, hash, receipt)
 }
 
 func (t *TransactionAPI) GetTransactionErrorByHash(_ context.Context, hash common.Hash) (result string, returnErr error) {
@@ -264,7 +288,7 @@ func (t *TransactionAPI) GetTransactionCount(ctx context.Context, address common
 	return (*hexutil.Uint64)(&nonce), nil
 }
 
-func (t *TransactionAPI) getTransactionWithBlock(block *coretypes.ResultBlock, index hexutil.Uint) (*ethapi.RPCTransaction, error) {
+func (t *TransactionAPI) getTransactionWithBlockCosmosIndex(block *coretypes.ResultBlock, index hexutil.Uint) (*ethapi.RPCTransaction, error) {
 	if int(index) >= len(block.Block.Txs) {
 		return nil, nil
 	}
@@ -277,13 +301,67 @@ func (t *TransactionAPI) getTransactionWithBlock(block *coretypes.ResultBlock, i
 		return nil, err
 	}
 	height := int64(receipt.BlockNumber)
-	baseFeePerGas := t.keeper.GetBaseFee(t.ctxProvider(height))
+	baseFeePerGas := t.keeper.GetCurrBaseFeePerGas(t.ctxProvider(height)).TruncateInt().BigInt()
 	chainConfig := types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(t.ctxProvider(height)))
 	blockHash := common.HexToHash(block.BlockID.Hash.String())
 	blockNumber := uint64(block.Block.Height)
 	blockTime := block.Block.Time
 	res := ethapi.NewRPCTransaction(ethtx, blockHash, blockNumber, uint64(blockTime.Unix()), uint64(receipt.TransactionIndex), baseFeePerGas, chainConfig)
 	return res, nil
+}
+
+func (t *TransactionAPI) getTransactionWithBlock(block *coretypes.ResultBlock, evmIndex hexutil.Uint) (*ethapi.RPCTransaction, error) {
+	decoder := t.txConfigProvider(block.Block.Height).TxDecoder()
+	var evmCount hexutil.Uint = 0
+	for _, txBz := range block.Block.Txs {
+		ethtx := getEthTxForTxBz(txBz, decoder)
+		if ethtx == nil {
+			continue
+		}
+		if evmCount == evmIndex {
+			receipt, err := t.keeper.GetReceipt(t.ctxProvider(LatestCtxHeight), ethtx.Hash())
+			if err != nil {
+				return nil, err
+			}
+			height := int64(receipt.BlockNumber)
+			baseFeePerGas := t.keeper.GetCurrBaseFeePerGas(t.ctxProvider(height)).TruncateInt().BigInt()
+			chainConfig := types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(t.ctxProvider(height)))
+			blockHash := common.HexToHash(block.BlockID.Hash.String())
+			blockNumber := uint64(block.Block.Height)
+			blockTime := block.Block.Time
+			res := ethapi.NewRPCTransaction(ethtx, blockHash, blockNumber, uint64(blockTime.Unix()), uint64(evmIndex), baseFeePerGas, chainConfig)
+			return res, nil
+		}
+		evmCount++
+	}
+	return nil, nil
+}
+
+func (t *TransactionAPI) getTransactionByHashFromBlock(ctx context.Context, hash common.Hash, receipt *types.Receipt) (*ethapi.RPCTransaction, error) {
+	height := int64(receipt.BlockNumber)
+	block, err := blockByNumberWithRetry(ctx, t.tmClient, &height, 1)
+	if err != nil {
+		return nil, err
+	}
+	decoder := t.txConfigProvider(block.Block.Height).TxDecoder()
+	var evmIndex uint64 = 0
+	for _, txBz := range block.Block.Txs {
+		ethtx := getEthTxForTxBz(txBz, decoder)
+		if ethtx == nil {
+			continue
+		}
+		if ethtx.Hash() == hash {
+			baseFeePerGas := t.keeper.GetCurrBaseFeePerGas(t.ctxProvider(height)).TruncateInt().BigInt()
+			chainConfig := types.DefaultChainConfig().EthereumConfig(t.keeper.ChainID(t.ctxProvider(height)))
+			blockHash := common.HexToHash(block.BlockID.Hash.String())
+			blockNumber := uint64(block.Block.Height)
+			blockTime := block.Block.Time
+			res := ethapi.NewRPCTransaction(ethtx, blockHash, blockNumber, uint64(blockTime.Unix()), evmIndex, baseFeePerGas, chainConfig)
+			return res, nil
+		}
+		evmIndex++
+	}
+	return nil, nil
 }
 
 func (t *TransactionAPI) Sign(addr common.Address, data hexutil.Bytes) (result hexutil.Bytes, returnErr error) {

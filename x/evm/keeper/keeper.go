@@ -43,6 +43,9 @@ import (
 	"github.com/tabilabs/tabi-v3/x/evm/types"
 )
 
+// DefaultBlockGasLimit is the fallback block gas limit when consensus params are unavailable
+const DefaultBlockGasLimit = 35_000_000
+
 type Keeper struct {
 	storeKey          sdk.StoreKey
 	transientStoreKey sdk.StoreKey
@@ -265,12 +268,19 @@ func (k *Keeper) GetVMBlockContext(ctx sdk.Context, gp core.GasPool) (*vm.BlockC
 
 	baseFee = k.GetBaseFeePerGas(ctx).TruncateInt().BigInt()
 
+	var gasLimit uint64
+	if ctx.ConsensusParams() != nil && ctx.ConsensusParams().Block != nil && ctx.ConsensusParams().Block.MaxGas > 0 {
+		gasLimit = uint64(ctx.ConsensusParams().Block.MaxGas)
+	} else {
+		gasLimit = DefaultBlockGasLimit
+	}
+
 	return &vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    txfer,
 		GetHash:     k.GetHashFn(ctx),
 		Coinbase:    coinbase,
-		GasLimit:    gp.Gas(),
+		GasLimit:    gasLimit,
 		BlockNumber: big.NewInt(ctx.BlockHeight()),
 		Time:        uint64(ctx.BlockHeader().Time.Unix()),
 		Difficulty:  utils.Big0, // only needed for PoW

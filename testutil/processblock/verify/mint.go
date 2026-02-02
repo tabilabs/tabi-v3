@@ -1,3 +1,6 @@
+//go:build epoch
+// +build epoch
+
 package verify
 
 import (

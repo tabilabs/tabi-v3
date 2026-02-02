@@ -1096,8 +1096,9 @@ func (app *App) ProcessProposalHandler(ctx sdk.Context, req *abci.RequestProcess
 		}
 	} else {
 		app.optimisticProcessingInfoMutex.Lock()
-		if !bytes.Equal(app.optimisticProcessingInfo.Hash, req.Hash) {
-			app.optimisticProcessingInfo.Aborted = true
+		info := app.optimisticProcessingInfo
+		if info != nil && !bytes.Equal(info.Hash, req.Hash) {
+			info.Aborted = true
 		}
 		app.optimisticProcessingInfoMutex.Unlock()
 	}

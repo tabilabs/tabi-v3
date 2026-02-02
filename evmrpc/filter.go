@@ -1002,12 +1002,16 @@ func (f *LogFetcher) processBatch(ctx context.Context, start, end int64, crit fi
 
 		// check bloom filter if cache miss AND we have filters
 		var blockBloom ethtypes.Bloom
+		var bloomExists bool
 		if len(crit.Addresses) != 0 || len(crit.Topics) != 0 {
 			// Bloom cache miss - read from database
 			providerCtx := f.ctxProvider(height)
-			blockBloom = f.k.GetBlockBloom(providerCtx)
+			// If ctxProvider falls back to a different height (e.g. pruned state), bloom cannot be trusted for filtering.
+			if providerCtx.BlockHeight() == height && evmExists(providerCtx, f.k) {
+				blockBloom, bloomExists = f.k.GetBlockBloomWithExists(providerCtx)
+			}
 
-			if !MatchFilters(blockBloom, bloomIndexes) {
+			if bloomExists && !MatchFilters(blockBloom, bloomIndexes) {
 				<-dbReadSemaphore
 				continue // skip the block if bloom filter does not match
 			}

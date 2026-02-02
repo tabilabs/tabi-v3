@@ -416,7 +416,14 @@ func EncodeTmBlock(
 		txHash = ethtypes.EmptyTxsHash
 	}
 
-	gasLimit := blockRes.ConsensusParamUpdates.Block.MaxGas
+	var gasLimit int64
+	if cp := ctx.ConsensusParams(); cp != nil && cp.Block != nil && cp.Block.MaxGas > 0 {
+		gasLimit = cp.Block.MaxGas
+	} else if blockRes != nil && blockRes.ConsensusParamUpdates != nil && blockRes.ConsensusParamUpdates.Block != nil && blockRes.ConsensusParamUpdates.Block.MaxGas > 0 {
+		gasLimit = blockRes.ConsensusParamUpdates.Block.MaxGas
+	} else {
+		gasLimit = keeper.DefaultBlockGasLimit
+	}
 	result := map[string]interface{}{
 		"number":           (*hexutil.Big)(number),
 		"hash":             blockhash,

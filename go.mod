@@ -232,6 +232,7 @@ replace (
 	github.com/cosmos/iavl => github.com/tabilabs/tabi-iavl v0.0.0-20251008130153-cda1a31b1aae
 	github.com/cosmos/ibc-go/v3 => github.com/tabilabs/tabi-ibc-go/v3 v3.0.0-20251008130603-3273ce4aabc5
 	github.com/ethereum/go-ethereum => github.com/tabilabs/go-ethereum v0.0.0-20251008125536-bcd46584feed
+	github.com/fjl/memsize => ./third_party/memsize
 	github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.3-alpha.regen.1
 	// Latest goleveldb is broken, we have to stick to this version
 	github.com/syndtr/goleveldb => github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7

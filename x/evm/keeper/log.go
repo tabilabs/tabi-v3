@@ -12,17 +12,26 @@ import (
 )
 
 func (k *Keeper) GetBlockBloom(ctx sdk.Context) (res ethtypes.Bloom) {
+	res, _ = k.GetBlockBloomWithExists(ctx)
+	return
+}
+
+func (k *Keeper) GetBlockBloomWithExists(ctx sdk.Context) (res ethtypes.Bloom, exists bool) {
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(types.BlockBloomPrefix)
 	if bz != nil {
 		res.SetBytes(bz)
-		return
+		return res, true
 	}
 	cutoff := k.GetLegacyBlockBloomCutoffHeight(ctx)
 	if cutoff == 0 || ctx.BlockHeight() < cutoff {
-		res = k.GetLegacyBlockBloom(ctx, ctx.BlockHeight())
+		legacyBz := store.Get(types.BlockBloomKey(ctx.BlockHeight()))
+		if legacyBz != nil {
+			res.SetBytes(legacyBz)
+			return res, true
+		}
 	}
-	return
+	return ethtypes.Bloom{}, false
 }
 
 func (k *Keeper) GetLegacyBlockBloom(ctx sdk.Context, height int64) (res ethtypes.Bloom) {
