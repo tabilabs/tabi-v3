@@ -247,7 +247,7 @@ func IncrGasCounter(gasType string, value int64) {
 	if value <= 0 {
 		return
 	}
-	const maxFloat32Safe int64 = 16777216
+	const maxFloat32Safe int64 = 16777215
 	const maxIterations = 100
 	for i := 0; value > 0 && i < maxIterations; i++ {
 		incr := value
