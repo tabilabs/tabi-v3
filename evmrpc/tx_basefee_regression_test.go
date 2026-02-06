@@ -23,6 +23,36 @@ import (
 	tmtypes "github.com/tendermint/tendermint/types"
 )
 
+// See comment in evmrpc/filter_regression_test.go.
+type tmClientMock struct{ rpcclientmocks.Client }
+
+func (m *tmClientMock) LagStatus(ctx context.Context) (*coretypes.ResultLagStatus, error) {
+	ret := m.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LagStatus")
+	}
+
+	var r0 *coretypes.ResultLagStatus
+	if rf, ok := ret.Get(0).(func(context.Context) (*coretypes.ResultLagStatus, error)); ok {
+		return rf(ctx)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context) *coretypes.ResultLagStatus); ok {
+		r0 = rf(ctx)
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*coretypes.ResultLagStatus)
+	}
+
+	var r1 error
+	if rf, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = rf(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 func TestGetTransactionByBlockNumberAndIndex_UsesBaseFeeForEffectiveGasPrice(t *testing.T) {
 	app := tabiapp.Setup(false, false, false)
 	k := &app.EvmKeeper
@@ -79,7 +109,7 @@ func TestGetTransactionByBlockNumberAndIndex_UsesBaseFeeForEffectiveGasPrice(t *
 		},
 	}
 
-	tmClient := &rpcclientmocks.Client{}
+	tmClient := &tmClientMock{}
 	tmClient.On("Block", mock.Anything, mock.Anything).Return(block, nil)
 
 	ctxProvider := func(i int64) sdk.Context {
