@@ -11,14 +11,22 @@ import (
 const maxNestedOracleMsgs = 5
 
 var oracleMsgTypeURLs = map[string]struct{}{
-	// Sei / Oracle 风格的核心消息类型
-	"/seiprotocol.sei.oracle.MsgAggregateExchangeRatePrevote": {},
-	"/seiprotocol.sei.oracle.MsgAggregateExchangeRateVote":    {},
-	"/seiprotocol.sei.oracle.MsgDelegateFeedConsent":          {},
+	// Tabi oracle 模块消息类型
+	"/tabilabs.tabi.oracle.MsgAggregateExchangeRatePrevote": {},
+	"/tabilabs.tabi.oracle.MsgAggregateExchangeRateVote":    {},
+	"/tabilabs.tabi.oracle.MsgDelegateFeedConsent":          {},
 	// 通用 oracle 模块消息类型
 	"/oracle.MsgAggregateExchangeRatePrevote": {},
 	"/oracle.MsgAggregateExchangeRateVote":    {},
 	"/oracle.MsgDelegateFeedConsent":          {},
+}
+
+func isOracleTypeURL(typeURL string) bool {
+	if _, ok := oracleMsgTypeURLs[typeURL]; ok {
+		return true
+	}
+	lower := strings.ToLower(typeURL)
+	return strings.Contains(lower, ".oracle.") || strings.Contains(lower, "/oracle.")
 }
 
 func IsTxPrioritized(tx sdk.Tx) bool {
@@ -40,12 +48,7 @@ func IsTxPrioritized(tx sdk.Tx) bool {
 }
 
 func isOracleMsg(msg sdk.Msg) bool {
-	typeURL := sdk.MsgTypeURL(msg)
-	if _, ok := oracleMsgTypeURLs[typeURL]; ok {
-		return true
-	}
-	lower := strings.ToLower(typeURL)
-	return strings.Contains(lower, ".oracle.") || strings.Contains(lower, "/oracle.")
+	return isOracleTypeURL(sdk.MsgTypeURL(msg))
 }
 
 func containsOracleInAuthz(authzMsg *authz.MsgExec, nestedLvl int) (bool, error) {
