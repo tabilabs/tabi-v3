@@ -29,14 +29,6 @@ import (
 	"github.com/tabilabs/tabi-v3/x/evm/types/ethtx"
 )
 
-// BalanceThreshold encodes 1 TABI in wei-denominated EVM balance units.
-// Current association checks only require a positive balance, but any explicit
-// threshold comparison in this package should use this value.
-const BalanceThreshold uint64 = 1_000_000_000_000_000_000
-
-var BigBalanceThreshold *big.Int = new(big.Int).SetUint64(BalanceThreshold)
-var BigBalanceThresholdMinus1 *big.Int = new(big.Int).SetUint64(BalanceThreshold - 1)
-
 var SignerMap = map[derived.SignerVersion]func(*big.Int) ethtypes.Signer{
 	derived.London: ethtypes.NewLondonSigner,
 	derived.Cancun: ethtypes.NewCancunSigner,
