@@ -9,8 +9,8 @@ import (
 
 // AtabiToWeiMultiplier converts atabi amounts to wei.
 //
-// On this chain, atabi == wei.
-var AtabiToWeiMultiplier = big.NewInt(1)
+// On this chain, 1 atabi = 10^12 wei, so 1 TABI = 10^18 wei.
+var AtabiToWeiMultiplier = big.NewInt(1_000_000_000_000)
 var SdkAtabiToWeiMultiplier = sdk.NewIntFromBigInt(AtabiToWeiMultiplier)
 
 var CoinbaseAddressPrefix = []byte("evm_coinbase")

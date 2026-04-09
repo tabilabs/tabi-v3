@@ -169,10 +169,9 @@ func getGovProposalHandlers() []govclient.ProposalHandler {
 }
 
 func init() {
-	// Set power reduction to 10^18 for EVM compatibility
-	// This ensures that 1 Token (10^18 atabi) = 1 Voting Power
-	// and prevents Int64 overflow for large validators.
-	powerReduction := sdk.NewIntFromBigInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
+	// Keep staking power reduction aligned with the registered base denom exponent.
+	// With AtabiExponent=6, 1 TABI (10^6 atabi) maps to 1 unit of voting power.
+	powerReduction := sdk.NewIntFromBigInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(appparams.AtabiExponent), nil))
 	sdk.DefaultPowerReduction = powerReduction
 }
 

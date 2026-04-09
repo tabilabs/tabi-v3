@@ -29,8 +29,10 @@ import (
 	"github.com/tabilabs/tabi-v3/x/evm/types/ethtx"
 )
 
-// Accounts need to have at least 1Tabi to force association. Note that account won't be charged.
-const BalanceThreshold uint64 = 1000000
+// BalanceThreshold encodes 1 TABI in wei-denominated EVM balance units.
+// Current association checks only require a positive balance, but any explicit
+// threshold comparison in this package should use this value.
+const BalanceThreshold uint64 = 1_000_000_000_000_000_000
 
 var BigBalanceThreshold *big.Int = new(big.Int).SetUint64(BalanceThreshold)
 var BigBalanceThresholdMinus1 *big.Int = new(big.Int).SetUint64(BalanceThreshold - 1)
@@ -76,10 +78,10 @@ func (p *EVMPreprocessDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate
 	if isAssociateTx && isAssociated {
 		return ctx, sdkerrors.Wrap(sdkerrors.ErrInvalidRequest, "account already has association set")
 	} else if isAssociateTx {
-		// check if the account has enough balance (without charging)
+		// check if the account has any positive balance (without charging)
 		if !p.IsAccountBalancePositive(ctx, tabiAddr, evmAddr) {
 			metrics.IncrementAssociationError("associate_tx_insufficient_funds", evmtypes.NewAssociationMissingErr(tabiAddr.String()))
-			return ctx, sdkerrors.Wrap(sdkerrors.ErrInsufficientFunds, "account needs to have at least 1 wei to force association")
+			return ctx, sdkerrors.Wrap(sdkerrors.ErrInsufficientFunds, "account needs to have a positive balance to force association")
 		}
 		if err := associateHelper.AssociateAddresses(ctx, tabiAddr, evmAddr, pubkey); err != nil {
 			return ctx, err
@@ -319,9 +321,9 @@ func (p *EVMAddressDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 			return ctx, err
 		}
 		if evmtypes.IsTxMsgAssociate(tx) {
-			// check if there is non-zero balance
+			// check if there is any positive balance
 			if !p.evmKeeper.BankKeeper().GetBalance(ctx, signer, sdk.MustGetBaseDenom()).IsPositive() && !p.evmKeeper.BankKeeper().GetWeiBalance(ctx, signer).IsPositive() {
-				return ctx, sdkerrors.Wrap(sdkerrors.ErrInsufficientFunds, "account needs to have at least 1 wei to force association")
+				return ctx, sdkerrors.Wrap(sdkerrors.ErrInsufficientFunds, "account needs to have a positive balance to force association")
 			}
 		}
 	}

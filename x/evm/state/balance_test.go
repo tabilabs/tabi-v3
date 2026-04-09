@@ -52,7 +52,7 @@ func TestSubBalance(t *testing.T) {
 	// set association
 	k.SetAddressMapping(db.Ctx(), tabiAddr, evmAddr)
 	require.Equal(t, big.NewInt(0), db.GetBalance(evmAddr))
-	amt := sdk.NewCoins(sdk.NewCoin(k.GetBaseDenom(ctx), sdk.NewInt(20_000_000_000_000)))
+	amt := sdk.NewCoins(sdk.NewCoin(k.GetBaseDenom(ctx), sdk.NewInt(20)))
 	k.BankKeeper().MintCoins(db.Ctx(), types.ModuleName, amt)
 	k.BankKeeper().SendCoinsFromModuleToAccount(db.Ctx(), types.ModuleName, tabiAddr, amt)
 	db.SubBalance(evmAddr, big.NewInt(10000000000000), tracing.BalanceChangeUnspecified)
@@ -60,7 +60,7 @@ func TestSubBalance(t *testing.T) {
 	require.Equal(t, db.GetBalance(evmAddr), big.NewInt(10000000000000))
 
 	_, evmAddr2 := testkeeper.MockAddressPair()
-	amt = sdk.NewCoins(sdk.NewCoin(k.GetBaseDenom(ctx), sdk.NewInt(10_000_000_000_000)))
+	amt = sdk.NewCoins(sdk.NewCoin(k.GetBaseDenom(ctx), sdk.NewInt(10)))
 	k.BankKeeper().MintCoins(db.Ctx(), types.ModuleName, amt)
 	k.BankKeeper().SendCoinsFromModuleToAccount(db.Ctx(), types.ModuleName, sdk.AccAddress(evmAddr2[:]), amt)
 	db.AddBalance(evmAddr2, big.NewInt(-5000000000000), tracing.BalanceChangeUnspecified) // should redirect to SubBalance

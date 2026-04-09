@@ -112,7 +112,7 @@ func (svd *EVMSigVerifyDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulat
 
 func hasSufficientBalance(k *evmkeeper.Keeper, ctx sdk.Context, evmAddr common.Address, tx *ethtypes.Transaction) bool {
 	senderTabiAddr := k.GetTabiAddressOrDefault(ctx, evmAddr)
-	// keeper.GetBalance returns wei-denominated balance: (unlocked atabi * 1e18) + wei.
+	// keeper.GetBalance returns wei-denominated balance: (unlocked atabi * 1e12) + wei.
 	balanceWei := k.GetBalance(ctx, senderTabiAddr)
 	maxCostWei := tx.Cost() // includes gas + blobGas (if any) + value
 	return balanceWei.Cmp(maxCostWei) >= 0

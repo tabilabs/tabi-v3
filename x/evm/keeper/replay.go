@@ -13,9 +13,8 @@ import (
 )
 
 func (k *Keeper) VerifyBalance(ctx sdk.Context, addr common.Address) {
-	atabiBalance := k.BankKeeper().GetBalance(ctx, k.GetTabiAddressOrDefault(ctx, addr), "atabi").Amount
-	weiBalance := k.bankKeeper.GetWeiBalance(ctx, k.GetTabiAddressOrDefault(ctx, addr))
-	totalTabiBalance := atabiBalance.Mul(sdk.NewInt(1_000_000_000_000)).Add(weiBalance).BigInt()
+	tabiAddr := k.GetTabiAddressOrDefault(ctx, addr)
+	totalTabiBalance := k.GetBalance(ctx, tabiAddr)
 	ethBalance, err := k.EthClient.BalanceAt(ctx.Context(), addr, big.NewInt(k.GetReplayInitialHeight(ctx)+ctx.BlockHeight()))
 	if err != nil {
 		panic(err)
