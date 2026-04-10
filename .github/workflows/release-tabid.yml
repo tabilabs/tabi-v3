@@ -1,0 +1,140 @@
+name: release-tabid
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: "Ref to build, for example main, a tag, or a commit"
+        required: true
+        default: "main"
+      release_tag:
+        description: "GitHub Release tag, for example v3.0.0-tabid.1"
+        required: true
+
+env:
+  TABIWASMD_RELEASE_TAG: "v0.3.6"
+  TARGET_ARCH: "x86_64"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-linux-amd64:
+    name: build linux amd64 tabid
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl wget jq python3
+
+      - name: Build static linux amd64 tabid
+        env:
+          LEDGER_ENABLED: "false"
+          BUILD_TAGS: "muslc"
+          LINK_STATICALLY: "true"
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          WASM_VERSION="$(go list -f '{{.Replace.Version}}' -m github.com/CosmWasm/wasmvm | sed 's/-.*//')"
+          if [ -n "${WASM_VERSION}" ]; then
+            wget -O /tmp/libwasmvm_muslc.a "https://github.com/CosmWasm/wasmvm/releases/download/${WASM_VERSION}/libwasmvm_muslc.${TARGET_ARCH}.a"
+            sudo cp /tmp/libwasmvm_muslc.a /lib/libwasmvm_muslc.a
+          fi
+          wget -O /tmp/libwasmvm152_muslc.a "https://github.com/tabilabs/tabi-wasmd/releases/download/${TABIWASMD_RELEASE_TAG}/libwasmvm152_muslc.${TARGET_ARCH}.a"
+          wget -O /tmp/libwasmvm155_muslc.a "https://github.com/tabilabs/tabi-wasmd/releases/download/${TABIWASMD_RELEASE_TAG}/libwasmvm155_muslc.${TARGET_ARCH}.a"
+          sudo cp /tmp/libwasmvm152_muslc.a /lib/libwasmvm152_muslc.a
+          sudo cp /tmp/libwasmvm155_muslc.a /lib/libwasmvm155_muslc.a
+          make build
+          install -m 0755 build/tabid dist/tabid-linux-amd64
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum tabid-linux-amd64 > tabid-linux-amd64.sha256
+          sha256sum tabid-linux-amd64 > SHA256SUMS
+
+      - name: Generate release manifest
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_REF: ${{ inputs.source_ref }}
+          SOURCE_COMMIT: ${{ github.sha }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          SOURCE_COMMIT="$(git rev-parse HEAD)"
+          python3 ./scripts/generate-tabid-release-manifest.py \
+            --artifact ./dist/tabid-linux-amd64 \
+            --release-tag "${RELEASE_TAG}" \
+            --source-ref "${SOURCE_REF}" \
+            --source-commit "${SOURCE_COMMIT}" \
+            --workflow "${WORKFLOW_NAME}" \
+            --workflow-run-id "${RUN_ID}" \
+            --workflow-run-attempt "${RUN_ATTEMPT}" \
+            --source-repo "${GITHUB_REPOSITORY}" \
+            --platform "linux/amd64" \
+            --checksum-file "SHA256SUMS" \
+            --out ./dist/release-manifest.json
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabid-linux-amd64-release
+          path: |
+            dist/tabid-linux-amd64
+            dist/tabid-linux-amd64.sha256
+            dist/SHA256SUMS
+            dist/release-manifest.json
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            dist/tabid-linux-amd64
+            dist/SHA256SUMS
+            dist/release-manifest.json
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          NOTES_FILE="$(mktemp)"
+          cat > "${NOTES_FILE}" <<EOF
+          Automated tabid release from ${{ github.repository }} @ ${{ inputs.source_ref }}
+          EOF
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${RELEASE_TAG}" \
+              dist/tabid-linux-amd64 \
+              dist/tabid-linux-amd64.sha256 \
+              dist/SHA256SUMS \
+              dist/release-manifest.json \
+              --clobber
+          else
+            gh release create "${RELEASE_TAG}" \
+              --title "${RELEASE_TAG}" \
+              --notes-file "${NOTES_FILE}" \
+              dist/tabid-linux-amd64 \
+              dist/tabid-linux-amd64.sha256 \
+              dist/SHA256SUMS \
+              dist/release-manifest.json
+          fi

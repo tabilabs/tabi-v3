@@ -7,6 +7,13 @@ Tabi is the fastest general purpose L1 blockchain and the first parallelized EVM
 # Documentation
 For the most up to date documentation please visit https://docs.tabichain.com/
 
+## Binary Release
+
+For `tabid` binary release guidance and local verification, see:
+
+- `docs/release/README.md`
+- `scripts/verify-tabid-release-artifacts.sh`
+
 # Testnet V3
 ## Get started
 **How to validate on the Tabi Testnet-v3**

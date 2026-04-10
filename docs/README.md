@@ -1,5 +1,12 @@
 # OpenAPI/Swagger docs generation
 
+## Other docs
+
+- `release/README.md`: `tabid` binary release and verification flow
+- `release/ROLLBACK.md`: `tabid` release rollback runbook
+- `release/PRE_MERGE_CHECKLIST.md`: merge gate before enabling the workflow on `main`
+- `release/FIRST_RELEASE_RUNBOOK.md`: first release execution steps after merge
+
 > **Note:** Anytime we make changes to the APIs/proto files, we also need to update the Swagger/OpenAPI docs.
 
 Both Swagger and OpenAPI terms are used interchangeably in this document.
