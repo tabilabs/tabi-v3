@@ -49,9 +49,14 @@ jobs:
           mkdir -p dist
           BUNDLE_DIR="dist/tabid-linux-amd64-glibc"
           BUNDLE_NAME="$(basename "${BUNDLE_DIR}")"
+          make build
           WASMVM_DIR="$(go list -f '{{.Dir}}' -m github.com/CosmWasm/wasmvm)"
           WASMD_DIR="$(go list -f '{{.Dir}}' -m github.com/CosmWasm/wasmd)"
-          make build
+          test -n "${WASMVM_DIR}"
+          test -n "${WASMD_DIR}"
+          test -f "${WASMVM_DIR}/internal/api/libwasmvm.${TARGET_ARCH}.so"
+          test -f "${WASMD_DIR}/x/wasm/artifacts/v152/api/libwasmvm152.${TARGET_ARCH}.so"
+          test -f "${WASMD_DIR}/x/wasm/artifacts/v155/api/libwasmvm155.${TARGET_ARCH}.so"
           mkdir -p "${BUNDLE_DIR}/lib"
           install -m 0755 build/tabid "${BUNDLE_DIR}/tabid"
           install -m 0644 "${WASMVM_DIR}/internal/api/libwasmvm.${TARGET_ARCH}.so" "${BUNDLE_DIR}/lib/"
