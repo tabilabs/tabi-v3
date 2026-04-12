@@ -21,10 +21,8 @@ RUN set -eux; \
     export ARCH=$(uname -m); \
     # Currently github.com/CosmWasm/wasmvm is being overriden by github.com/tabilabs/tabi-vasmvm
     # (see go.mod). However the rust precompiles are still fetched from the upstream repository.
-    # Here we assume that the tabi-vasm release version is prefixed with the wasmvm release version
-    # with the matching precompiles. Therefore, to compute the download url, we just strip the suffix
-    # of the tabi-vasm release version.
-    WASM_VERSION=$(go list -f {{.Replace.Version}} -m github.com/CosmWasm/wasmvm | sed s/-.*//); \
+    # Fetch the upstream wasmvm release that matches the declared module version.
+    WASM_VERSION=$(go list -f {{.Version}} -m github.com/CosmWasm/wasmvm); \
     if [ ! -z "${WASM_VERSION}" ]; then \
       wget -O /lib/libwasmvm_muslc.a https://github.com/CosmWasm/wasmvm/releases/download/${WASM_VERSION}/libwasmvm_muslc.${ARCH}.a; \
     fi; \

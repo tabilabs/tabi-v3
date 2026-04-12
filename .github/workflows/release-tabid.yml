@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          WASM_VERSION="$(go list -f '{{.Replace.Version}}' -m github.com/CosmWasm/wasmvm | sed 's/-.*//')"
+          WASM_VERSION="$(go list -f '{{.Version}}' -m github.com/CosmWasm/wasmvm)"
           if [ -n "${WASM_VERSION}" ]; then
             wget -O /tmp/libwasmvm_muslc.a "https://github.com/CosmWasm/wasmvm/releases/download/${WASM_VERSION}/libwasmvm_muslc.${TARGET_ARCH}.a"
             sudo cp /tmp/libwasmvm_muslc.a /lib/libwasmvm_muslc.a
