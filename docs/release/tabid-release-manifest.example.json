@@ -9,7 +9,7 @@
   "manifest_generated_at_utc": "2026-04-10T12:00:00Z",
   "go_version": "go version go1.24.7 linux/amd64",
   "platform": "linux/amd64",
-  "artifact_name": "tabid-linux-amd64",
+  "artifact_name": "tabid-linux-amd64-glibc.tar.gz",
   "artifact_sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "checksum_file": "SHA256SUMS"
 }

@@ -12,7 +12,6 @@ on:
         required: true
 
 env:
-  TABIWASMD_RELEASE_TAG: "v0.3.6"
   TARGET_ARCH: "x86_64"
 
 permissions:
@@ -40,34 +39,53 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential curl wget jq python3
+          sudo apt-get install -y binutils build-essential curl jq patchelf python3
 
-      - name: Build static linux amd64 tabid
+      - name: Build linux amd64 tabid glibc bundle
         env:
           LEDGER_ENABLED: "false"
-          BUILD_TAGS: "muslc"
-          LINK_STATICALLY: "true"
         run: |
           set -euo pipefail
           mkdir -p dist
-          WASM_VERSION="$(go list -f '{{.Version}}' -m github.com/CosmWasm/wasmvm)"
-          if [ -n "${WASM_VERSION}" ]; then
-            wget -O /tmp/libwasmvm_muslc.a "https://github.com/CosmWasm/wasmvm/releases/download/${WASM_VERSION}/libwasmvm_muslc.${TARGET_ARCH}.a"
-            sudo cp /tmp/libwasmvm_muslc.a /lib/libwasmvm_muslc.a
-          fi
-          wget -O /tmp/libwasmvm152_muslc.a "https://github.com/tabilabs/tabi-wasmd/releases/download/${TABIWASMD_RELEASE_TAG}/libwasmvm152_muslc.${TARGET_ARCH}.a"
-          wget -O /tmp/libwasmvm155_muslc.a "https://github.com/tabilabs/tabi-wasmd/releases/download/${TABIWASMD_RELEASE_TAG}/libwasmvm155_muslc.${TARGET_ARCH}.a"
-          sudo cp /tmp/libwasmvm152_muslc.a /lib/libwasmvm152_muslc.a
-          sudo cp /tmp/libwasmvm155_muslc.a /lib/libwasmvm155_muslc.a
+          BUNDLE_DIR="dist/tabid-linux-amd64-glibc"
+          BUNDLE_NAME="$(basename "${BUNDLE_DIR}")"
+          WASMVM_DIR="$(go list -f '{{.Dir}}' -m github.com/CosmWasm/wasmvm)"
+          WASMD_DIR="$(go list -f '{{.Dir}}' -m github.com/CosmWasm/wasmd)"
           make build
-          install -m 0755 build/tabid dist/tabid-linux-amd64
+          mkdir -p "${BUNDLE_DIR}/lib"
+          install -m 0755 build/tabid "${BUNDLE_DIR}/tabid"
+          install -m 0644 "${WASMVM_DIR}/internal/api/libwasmvm.${TARGET_ARCH}.so" "${BUNDLE_DIR}/lib/"
+          install -m 0644 "${WASMD_DIR}/x/wasm/artifacts/v152/api/libwasmvm152.${TARGET_ARCH}.so" "${BUNDLE_DIR}/lib/"
+          install -m 0644 "${WASMD_DIR}/x/wasm/artifacts/v155/api/libwasmvm155.${TARGET_ARCH}.so" "${BUNDLE_DIR}/lib/"
+          patchelf --set-rpath '$ORIGIN/lib' "${BUNDLE_DIR}/tabid"
+          "${BUNDLE_DIR}/tabid" version >/dev/null
+          tar -C dist -czf "dist/${BUNDLE_NAME}.tar.gz" "${BUNDLE_NAME}"
+
+      - name: Smoke test glibc bundle
+        run: |
+          set -euo pipefail
+          SMOKE_DIR="$(mktemp -d)"
+          tar -C "${SMOKE_DIR}" -xzf dist/tabid-linux-amd64-glibc.tar.gz
+          BUNDLE_DIR="${SMOKE_DIR}/tabid-linux-amd64-glibc"
+          HOME_DIR="${SMOKE_DIR}/home"
+          mkdir -p "${HOME_DIR}"
+          test -x "${BUNDLE_DIR}/tabid"
+          test -f "${BUNDLE_DIR}/lib/libwasmvm.x86_64.so"
+          test -f "${BUNDLE_DIR}/lib/libwasmvm152.x86_64.so"
+          test -f "${BUNDLE_DIR}/lib/libwasmvm155.x86_64.so"
+          readelf -d "${BUNDLE_DIR}/tabid" | grep -F '$ORIGIN/lib'
+          ldd "${BUNDLE_DIR}/tabid" | tee "${SMOKE_DIR}/ldd.txt"
+          awk -v expected="${BUNDLE_DIR}/lib/libwasmvm.x86_64.so" '$1 == "libwasmvm.x86_64.so" { if ($3 != expected) exit 1; found=1 } END { exit(found ? 0 : 1) }' "${SMOKE_DIR}/ldd.txt"
+          awk -v expected="${BUNDLE_DIR}/lib/libwasmvm152.x86_64.so" '$1 == "libwasmvm152.x86_64.so" { if ($3 != expected) exit 1; found=1 } END { exit(found ? 0 : 1) }' "${SMOKE_DIR}/ldd.txt"
+          awk -v expected="${BUNDLE_DIR}/lib/libwasmvm155.x86_64.so" '$1 == "libwasmvm155.x86_64.so" { if ($3 != expected) exit 1; found=1 } END { exit(found ? 0 : 1) }' "${SMOKE_DIR}/ldd.txt"
+          env -i PATH="${PATH}" HOME="${HOME_DIR}" LD_LIBRARY_PATH= "${BUNDLE_DIR}/tabid" version >/dev/null
 
       - name: Generate checksums
         run: |
           set -euo pipefail
           cd dist
-          sha256sum tabid-linux-amd64 > tabid-linux-amd64.sha256
-          sha256sum tabid-linux-amd64 > SHA256SUMS
+          sha256sum tabid-linux-amd64-glibc.tar.gz > tabid-linux-amd64-glibc.tar.gz.sha256
+          sha256sum tabid-linux-amd64-glibc.tar.gz > SHA256SUMS
 
       - name: Generate release manifest
         env:
@@ -82,7 +100,7 @@ jobs:
           set -euo pipefail
           SOURCE_COMMIT="$(git rev-parse HEAD)"
           python3 ./scripts/generate-tabid-release-manifest.py \
-            --artifact ./dist/tabid-linux-amd64 \
+            --artifact ./dist/tabid-linux-amd64-glibc.tar.gz \
             --release-tag "${RELEASE_TAG}" \
             --source-ref "${SOURCE_REF}" \
             --source-commit "${SOURCE_COMMIT}" \
@@ -99,8 +117,8 @@ jobs:
         with:
           name: tabid-linux-amd64-release
           path: |
-            dist/tabid-linux-amd64
-            dist/tabid-linux-amd64.sha256
+            dist/tabid-linux-amd64-glibc.tar.gz
+            dist/tabid-linux-amd64-glibc.tar.gz.sha256
             dist/SHA256SUMS
             dist/release-manifest.json
 
@@ -108,7 +126,7 @@ jobs:
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: |
-            dist/tabid-linux-amd64
+            dist/tabid-linux-amd64-glibc.tar.gz
             dist/SHA256SUMS
             dist/release-manifest.json
 
@@ -124,8 +142,8 @@ jobs:
           EOF
           if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
             gh release upload "${RELEASE_TAG}" \
-              dist/tabid-linux-amd64 \
-              dist/tabid-linux-amd64.sha256 \
+              dist/tabid-linux-amd64-glibc.tar.gz \
+              dist/tabid-linux-amd64-glibc.tar.gz.sha256 \
               dist/SHA256SUMS \
               dist/release-manifest.json \
               --clobber
@@ -133,8 +151,8 @@ jobs:
             gh release create "${RELEASE_TAG}" \
               --title "${RELEASE_TAG}" \
               --notes-file "${NOTES_FILE}" \
-              dist/tabid-linux-amd64 \
-              dist/tabid-linux-amd64.sha256 \
+              dist/tabid-linux-amd64-glibc.tar.gz \
+              dist/tabid-linux-amd64-glibc.tar.gz.sha256 \
               dist/SHA256SUMS \
               dist/release-manifest.json
           fi

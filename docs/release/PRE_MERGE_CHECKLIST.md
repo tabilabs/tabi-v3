@@ -16,6 +16,7 @@ Use this checklist before merging the `tabid` release workflow branch into `main
 - The PR only introduces the first release phase:
   - `linux/amd64`
   - `tabid`
+  - glibc runtime bundle
   - GitHub Release
   - `SHA256SUMS`
   - `release-manifest.json`
@@ -25,14 +26,15 @@ Use this checklist before merging the `tabid` release workflow branch into `main
 
 ## Build Logic
 
-- The workflow build flags match the documented release strategy:
+- The workflow build steps match the documented release strategy:
   - `LEDGER_ENABLED=false`
-  - `BUILD_TAGS=muslc`
-  - `LINK_STATICALLY=true`
-- The workflow fetches the required `libwasmvm` artifacts successfully through controlled variables.
+  - `make build`
+  - collect the three required glibc `.so` files from the pinned module cache
+  - patch the binary runpath to `$ORIGIN/lib`
+  - package a tarball bundle
 - The workflow produces:
-  - `tabid-linux-amd64`
-  - `tabid-linux-amd64.sha256`
+  - `tabid-linux-amd64-glibc.tar.gz`
+  - `tabid-linux-amd64-glibc.tar.gz.sha256`
   - `SHA256SUMS`
   - `release-manifest.json`
 
@@ -41,9 +43,11 @@ Use this checklist before merging the `tabid` release workflow branch into `main
 - `release-manifest.json` uses a resolved `source_commit`, not an ambiguous commit field.
 - The manifest schema and example file match.
 - `scripts/verify-tabid-release-artifacts.sh` verifies:
-  - binary checksum
+  - artifact checksum
+  - bundle contents for the glibc tarball
   - manifest fields
   - expected repo/tag/platform
+  - linux/x86_64 runtime resolution from the extracted bundle `lib/` directory
 
 ## Merge Strategy
 
@@ -62,6 +66,7 @@ Use this checklist before merging the `tabid` release workflow branch into `main
   - release tag
   - expected sha256
   - expected platform
+- Release docs clearly state that the current artifact is a glibc bundle and requires a compatible host runtime instead of claiming universal `linux/amd64` compatibility.
 
 ## Final Go/No-Go
 

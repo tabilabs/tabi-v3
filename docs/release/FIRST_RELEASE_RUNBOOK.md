@@ -62,7 +62,7 @@ The workflow should complete these major stages successfully:
 1. checkout
 2. Go setup
 3. dependency install
-4. static build
+4. glibc bundle build
 5. checksum generation
 6. manifest generation
 7. workflow artifact upload
@@ -79,8 +79,8 @@ If any stage fails:
 
 After workflow success, verify the GitHub Release contains:
 
-- `tabid-linux-amd64`
-- `tabid-linux-amd64.sha256`
+- `tabid-linux-amd64-glibc.tar.gz`
+- `tabid-linux-amd64-glibc.tar.gz.sha256`
 - `SHA256SUMS`
 - `release-manifest.json`
 
@@ -92,7 +92,7 @@ Download the artifacts locally and run:
 
 ```bash
 ./scripts/verify-tabid-release-artifacts.sh \
-  --binary ./tabid-linux-amd64 \
+  --bundle ./tabid-linux-amd64-glibc.tar.gz \
   --checksums ./SHA256SUMS \
   --manifest ./release-manifest.json \
   --expected-repo tabilabs/tabi-v3 \
@@ -103,7 +103,15 @@ Download the artifacts locally and run:
 Expected outcome:
 
 - checksum verification passes
+- bundle content verification passes
 - manifest verification passes
+- runtime smoke test passes on `linux/x86_64`
+- bundled wasm libraries resolve from the extracted `lib/` directory
+
+Compatibility note:
+
+- This release is a `linux/amd64` glibc bundle, not a fully static binary.
+- Before handing it to operators, verify the target host provides `glibc >= 2.34` or run the verification script directly on the target class of machine.
 
 ## Step 6: Verify Attestation
 
