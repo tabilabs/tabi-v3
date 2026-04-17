@@ -284,6 +284,12 @@ jobs:
       - build-darwin-arm64
 
     steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 1
+
       - name: Download linux workflow artifact
         uses: actions/download-artifact@v4
         with:
