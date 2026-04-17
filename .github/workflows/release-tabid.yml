@@ -12,7 +12,8 @@ on:
         required: true
 
 env:
-  TARGET_ARCH: "x86_64"
+  LC_ALL: C
+  LANG: C
 
 permissions:
   contents: write
@@ -49,30 +50,50 @@ jobs:
           mkdir -p dist
           BUNDLE_DIR="dist/tabid-linux-amd64-glibc"
           BUNDLE_NAME="$(basename "${BUNDLE_DIR}")"
+          MANIFEST_NAME="release-manifest-linux-amd64.json"
+          WASMVM_DIR="$(go list -m -f '{{if .Replace}}{{.Replace.Dir}}{{else}}{{.Dir}}{{end}}' github.com/CosmWasm/wasmvm)"
+          WASMD_DIR="$(go list -m -f '{{if .Replace}}{{.Replace.Dir}}{{else}}{{.Dir}}{{end}}' github.com/CosmWasm/wasmd)"
+
           make build
-          WASMVM_DIR="$(go list -f '{{.Dir}}' -m github.com/CosmWasm/wasmvm)"
-          WASMD_DIR="$(go list -f '{{.Dir}}' -m github.com/CosmWasm/wasmd)"
           test -n "${WASMVM_DIR}"
           test -n "${WASMD_DIR}"
-          test -f "${WASMVM_DIR}/internal/api/libwasmvm.${TARGET_ARCH}.so"
-          test -f "${WASMD_DIR}/x/wasm/artifacts/v152/api/libwasmvm152.${TARGET_ARCH}.so"
-          test -f "${WASMD_DIR}/x/wasm/artifacts/v155/api/libwasmvm155.${TARGET_ARCH}.so"
+          test -f "${WASMVM_DIR}/internal/api/libwasmvm.x86_64.so"
+          test -f "${WASMD_DIR}/x/wasm/artifacts/v152/api/libwasmvm152.x86_64.so"
+          test -f "${WASMD_DIR}/x/wasm/artifacts/v155/api/libwasmvm155.x86_64.so"
+
           mkdir -p "${BUNDLE_DIR}/lib"
           install -m 0755 build/tabid "${BUNDLE_DIR}/tabid"
-          install -m 0644 "${WASMVM_DIR}/internal/api/libwasmvm.${TARGET_ARCH}.so" "${BUNDLE_DIR}/lib/"
-          install -m 0644 "${WASMD_DIR}/x/wasm/artifacts/v152/api/libwasmvm152.${TARGET_ARCH}.so" "${BUNDLE_DIR}/lib/"
-          install -m 0644 "${WASMD_DIR}/x/wasm/artifacts/v155/api/libwasmvm155.${TARGET_ARCH}.so" "${BUNDLE_DIR}/lib/"
+          install -m 0644 "${WASMVM_DIR}/internal/api/libwasmvm.x86_64.so" "${BUNDLE_DIR}/lib/"
+          install -m 0644 "${WASMD_DIR}/x/wasm/artifacts/v152/api/libwasmvm152.x86_64.so" "${BUNDLE_DIR}/lib/"
+          install -m 0644 "${WASMD_DIR}/x/wasm/artifacts/v155/api/libwasmvm155.x86_64.so" "${BUNDLE_DIR}/lib/"
           patchelf --set-rpath '$ORIGIN/lib' "${BUNDLE_DIR}/tabid"
           "${BUNDLE_DIR}/tabid" version >/dev/null
           tar -C dist -czf "dist/${BUNDLE_NAME}.tar.gz" "${BUNDLE_NAME}"
+          (
+            cd dist
+            sha256sum "${BUNDLE_NAME}.tar.gz" > "${BUNDLE_NAME}.tar.gz.sha256"
+          )
+          python3 ./scripts/generate-tabid-release-manifest.py \
+            --artifact "./dist/${BUNDLE_NAME}.tar.gz" \
+            --release-tag "${{ inputs.release_tag }}" \
+            --source-ref "${{ inputs.source_ref }}" \
+            --source-commit "$(git rev-parse HEAD)" \
+            --workflow "${{ github.workflow }}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --workflow-run-attempt "${{ github.run_attempt }}" \
+            --source-repo "${{ github.repository }}" \
+            --platform "linux/amd64" \
+            --checksum-file "SHA256SUMS" \
+            --out "./dist/${MANIFEST_NAME}"
 
-      - name: Smoke test glibc bundle
+      - name: Smoke test linux amd64 glibc bundle
         run: |
           set -euo pipefail
           SMOKE_DIR="$(mktemp -d)"
           tar -C "${SMOKE_DIR}" -xzf dist/tabid-linux-amd64-glibc.tar.gz
           BUNDLE_DIR="${SMOKE_DIR}/tabid-linux-amd64-glibc"
           HOME_DIR="${SMOKE_DIR}/home"
+
           mkdir -p "${HOME_DIR}"
           test -x "${BUNDLE_DIR}/tabid"
           test -f "${BUNDLE_DIR}/lib/libwasmvm.x86_64.so"
@@ -85,55 +106,172 @@ jobs:
           awk -v expected="${BUNDLE_DIR}/lib/libwasmvm155.x86_64.so" '$1 == "libwasmvm155.x86_64.so" { if ($3 != expected) exit 1; found=1 } END { exit(found ? 0 : 1) }' "${SMOKE_DIR}/ldd.txt"
           env -i PATH="${PATH}" HOME="${HOME_DIR}" LD_LIBRARY_PATH= "${BUNDLE_DIR}/tabid" version >/dev/null
 
-      - name: Generate checksums
-        run: |
-          set -euo pipefail
-          cd dist
-          sha256sum tabid-linux-amd64-glibc.tar.gz > tabid-linux-amd64-glibc.tar.gz.sha256
-          sha256sum tabid-linux-amd64-glibc.tar.gz > SHA256SUMS
-
-      - name: Generate release manifest
-        env:
-          RELEASE_TAG: ${{ inputs.release_tag }}
-          SOURCE_REF: ${{ inputs.source_ref }}
-          SOURCE_COMMIT: ${{ github.sha }}
-          WORKFLOW_NAME: ${{ github.workflow }}
-          RUN_ID: ${{ github.run_id }}
-          RUN_ATTEMPT: ${{ github.run_attempt }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          SOURCE_COMMIT="$(git rev-parse HEAD)"
-          python3 ./scripts/generate-tabid-release-manifest.py \
-            --artifact ./dist/tabid-linux-amd64-glibc.tar.gz \
-            --release-tag "${RELEASE_TAG}" \
-            --source-ref "${SOURCE_REF}" \
-            --source-commit "${SOURCE_COMMIT}" \
-            --workflow "${WORKFLOW_NAME}" \
-            --workflow-run-id "${RUN_ID}" \
-            --workflow-run-attempt "${RUN_ATTEMPT}" \
-            --source-repo "${GITHUB_REPOSITORY}" \
-            --platform "linux/amd64" \
-            --checksum-file "SHA256SUMS" \
-            --out ./dist/release-manifest.json
-
-      - name: Upload workflow artifact
+      - name: Upload linux workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: tabid-linux-amd64-release
           path: |
             dist/tabid-linux-amd64-glibc.tar.gz
             dist/tabid-linux-amd64-glibc.tar.gz.sha256
-            dist/SHA256SUMS
-            dist/release-manifest.json
+            dist/release-manifest-linux-amd64.json
 
-      - name: Attest build provenance
+      - name: Attest linux build provenance
         uses: actions/attest-build-provenance@v1
         with:
           subject-path: |
             dist/tabid-linux-amd64-glibc.tar.gz
+            dist/tabid-linux-amd64-glibc.tar.gz.sha256
+            dist/release-manifest-linux-amd64.json
+
+  build-darwin-arm64:
+    name: build darwin arm64 tabid
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build darwin arm64 tabid bundle
+        env:
+          LEDGER_ENABLED: "false"
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/home"
+          mkdir -p dist
+          BUNDLE_DIR="dist/tabid-darwin-arm64"
+          BUNDLE_NAME="$(basename "${BUNDLE_DIR}")"
+          MANIFEST_NAME="release-manifest-darwin-arm64.json"
+          WASMVM_DIR="$(go list -m -f '{{if .Replace}}{{.Replace.Dir}}{{else}}{{.Dir}}{{end}}' github.com/CosmWasm/wasmvm)"
+          WASMD_DIR="$(go list -m -f '{{if .Replace}}{{.Replace.Dir}}{{else}}{{.Dir}}{{end}}' github.com/CosmWasm/wasmd)"
+
+          test "$(uname -s)" = "Darwin"
+          test "$(uname -m)" = "arm64"
+          make build
+          test -n "${WASMVM_DIR}"
+          test -n "${WASMD_DIR}"
+          test -f "${WASMVM_DIR}/internal/api/libwasmvm.dylib"
+          test -f "${WASMD_DIR}/x/wasm/artifacts/v152/api/libwasmvm152.dylib"
+          test -f "${WASMD_DIR}/x/wasm/artifacts/v155/api/libwasmvm155.dylib"
+
+          mkdir -p "${BUNDLE_DIR}/lib"
+          install -m 0755 build/tabid "${BUNDLE_DIR}/tabid"
+          install -m 0644 "${WASMVM_DIR}/internal/api/libwasmvm.dylib" "${BUNDLE_DIR}/lib/"
+          install -m 0644 "${WASMD_DIR}/x/wasm/artifacts/v152/api/libwasmvm152.dylib" "${BUNDLE_DIR}/lib/"
+          install -m 0644 "${WASMD_DIR}/x/wasm/artifacts/v155/api/libwasmvm155.dylib" "${BUNDLE_DIR}/lib/"
+
+          while IFS= read -r rpath; do
+            install_name_tool -delete_rpath "${rpath}" "${BUNDLE_DIR}/tabid" || true
+          done < <(otool -l "${BUNDLE_DIR}/tabid" | awk '/cmd LC_RPATH/{getline; getline; if ($1 == "path") print $2}')
+          install_name_tool -add_rpath "@executable_path/lib" "${BUNDLE_DIR}/tabid"
+          codesign --force --sign - "${BUNDLE_DIR}/lib/"*.dylib "${BUNDLE_DIR}/tabid"
+          env -i PATH="${PATH}" HOME="${RUNNER_TEMP}/home" "${BUNDLE_DIR}/tabid" version >/dev/null
+
+          tar -C dist -czf "dist/${BUNDLE_NAME}.tar.gz" "${BUNDLE_NAME}"
+          (
+            cd dist
+            shasum -a 256 "${BUNDLE_NAME}.tar.gz" > "${BUNDLE_NAME}.tar.gz.sha256"
+          )
+          python3 ./scripts/generate-tabid-release-manifest.py \
+            --artifact "./dist/${BUNDLE_NAME}.tar.gz" \
+            --release-tag "${{ inputs.release_tag }}" \
+            --source-ref "${{ inputs.source_ref }}" \
+            --source-commit "$(git rev-parse HEAD)" \
+            --workflow "${{ github.workflow }}" \
+            --workflow-run-id "${{ github.run_id }}" \
+            --workflow-run-attempt "${{ github.run_attempt }}" \
+            --source-repo "${{ github.repository }}" \
+            --platform "darwin/arm64" \
+            --checksum-file "SHA256SUMS" \
+            --out "./dist/${MANIFEST_NAME}"
+
+      - name: Smoke test darwin arm64 bundle
+        run: |
+          set -euo pipefail
+          SMOKE_DIR="$(mktemp -d)"
+          tar -C "${SMOKE_DIR}" -xzf dist/tabid-darwin-arm64.tar.gz
+          BUNDLE_DIR="${SMOKE_DIR}/tabid-darwin-arm64"
+          HOME_DIR="${SMOKE_DIR}/home"
+
+          mkdir -p "${HOME_DIR}"
+          test -x "${BUNDLE_DIR}/tabid"
+          test -f "${BUNDLE_DIR}/lib/libwasmvm.dylib"
+          test -f "${BUNDLE_DIR}/lib/libwasmvm152.dylib"
+          test -f "${BUNDLE_DIR}/lib/libwasmvm155.dylib"
+          otool -l "${BUNDLE_DIR}/tabid" | awk '/cmd LC_RPATH/{getline; getline; if ($1 == "path") print $2}' | grep -Fx '@executable_path/lib'
+          if otool -l "${BUNDLE_DIR}/tabid" | awk '/cmd LC_RPATH/{getline; getline; if ($1 == "path") print $2}' | grep -Eq '^/'; then
+            echo "unexpected absolute rpath in bundle tabid" >&2
+            exit 1
+          fi
+          codesign --verify --deep --strict "${BUNDLE_DIR}/tabid"
+          env -i PATH="${PATH}" HOME="${HOME_DIR}" "${BUNDLE_DIR}/tabid" version >/dev/null
+
+      - name: Upload darwin workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabid-darwin-arm64-release
+          path: |
+            dist/tabid-darwin-arm64.tar.gz
+            dist/tabid-darwin-arm64.tar.gz.sha256
+            dist/release-manifest-darwin-arm64.json
+
+      - name: Attest darwin build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            dist/tabid-darwin-arm64.tar.gz
+            dist/tabid-darwin-arm64.tar.gz.sha256
+            dist/release-manifest-darwin-arm64.json
+
+  publish-release:
+    name: publish GitHub release
+    runs-on: ubuntu-24.04
+    needs:
+      - build-linux-amd64
+      - build-darwin-arm64
+
+    steps:
+      - name: Download linux workflow artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tabid-linux-amd64-release
+          path: dist
+
+      - name: Download darwin workflow artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tabid-darwin-arm64-release
+          path: dist
+
+      - name: Assemble consolidated checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          cat tabid-linux-amd64-glibc.tar.gz.sha256 tabid-darwin-arm64.tar.gz.sha256 | LC_ALL=C sort -k2,2 > SHA256SUMS
+
+      - name: Upload assembled release metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabid-release-assembled
+          path: |
             dist/SHA256SUMS
-            dist/release-manifest.json
+            dist/release-manifest-linux-amd64.json
+            dist/release-manifest-darwin-arm64.json
+
+      - name: Attest consolidated release metadata
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: |
+            dist/SHA256SUMS
+            dist/release-manifest-linux-amd64.json
+            dist/release-manifest-darwin-arm64.json
 
       - name: Publish GitHub release
         env:
@@ -149,8 +287,11 @@ jobs:
             gh release upload "${RELEASE_TAG}" \
               dist/tabid-linux-amd64-glibc.tar.gz \
               dist/tabid-linux-amd64-glibc.tar.gz.sha256 \
+              dist/tabid-darwin-arm64.tar.gz \
+              dist/tabid-darwin-arm64.tar.gz.sha256 \
               dist/SHA256SUMS \
-              dist/release-manifest.json \
+              dist/release-manifest-linux-amd64.json \
+              dist/release-manifest-darwin-arm64.json \
               --clobber
           else
             gh release create "${RELEASE_TAG}" \
@@ -158,6 +299,9 @@ jobs:
               --notes-file "${NOTES_FILE}" \
               dist/tabid-linux-amd64-glibc.tar.gz \
               dist/tabid-linux-amd64-glibc.tar.gz.sha256 \
+              dist/tabid-darwin-arm64.tar.gz \
+              dist/tabid-darwin-arm64.tar.gz.sha256 \
               dist/SHA256SUMS \
-              dist/release-manifest.json
+              dist/release-manifest-linux-amd64.json \
+              dist/release-manifest-darwin-arm64.json
           fi
