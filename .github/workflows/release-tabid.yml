@@ -14,6 +14,8 @@ on:
 env:
   LC_ALL: C
   LANG: C
+  GOPROXY: https://proxy.golang.org,direct
+  GOSUMDB: sum.golang.org
 
 permissions:
   contents: write
@@ -36,6 +38,28 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Download Go modules
+        run: |
+          set -euo pipefail
+          go env GOPROXY GOSUMDB GOPRIVATE GONOSUMDB GOMODCACHE GOCACHE GOPATH GOVERSION
+          attempt=1
+          max_attempts=3
+          while (( attempt <= max_attempts )); do
+            echo "go mod download attempt ${attempt}/${max_attempts}"
+            if go mod download -x; then
+              go mod verify
+              exit 0
+            fi
+            if (( attempt == max_attempts )); then
+              echo "go mod download failed after ${max_attempts} attempts" >&2
+              exit 1
+            fi
+            echo "go mod download failed; cleaning module cache before retry" >&2
+            go clean -modcache
+            sleep $(( attempt * 10 ))
+            attempt=$(( attempt + 1 ))
+          done
 
       - name: Install build dependencies
         run: |
@@ -138,6 +162,28 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Download Go modules
+        run: |
+          set -euo pipefail
+          go env GOPROXY GOSUMDB GOPRIVATE GONOSUMDB GOMODCACHE GOCACHE GOPATH GOVERSION
+          attempt=1
+          max_attempts=3
+          while (( attempt <= max_attempts )); do
+            echo "go mod download attempt ${attempt}/${max_attempts}"
+            if go mod download -x; then
+              go mod verify
+              exit 0
+            fi
+            if (( attempt == max_attempts )); then
+              echo "go mod download failed after ${max_attempts} attempts" >&2
+              exit 1
+            fi
+            echo "go mod download failed; cleaning module cache before retry" >&2
+            go clean -modcache
+            sleep $(( attempt * 10 ))
+            attempt=$(( attempt + 1 ))
+          done
 
       - name: Build darwin arm64 tabid bundle
         env:
