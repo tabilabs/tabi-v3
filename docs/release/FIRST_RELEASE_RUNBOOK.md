@@ -8,6 +8,7 @@ Publish the first controlled `tabid` binary release and verify that:
 
 - the workflow completes successfully
 - the release artifacts are internally consistent
+- both supported release lanes are published
 - the release can be consumed by downstream tooling
 
 This first execution should use a non-production release tag.
@@ -61,12 +62,12 @@ The workflow should complete these major stages successfully:
 
 1. checkout
 2. Go setup
-3. dependency install
-4. glibc bundle build
-5. checksum generation
-6. manifest generation
-7. workflow artifact upload
-8. build attestation
+3. Linux dependency install
+4. Linux bundle build and smoke test
+5. macOS bundle build and smoke test
+6. workflow artifact upload
+7. build attestation
+8. consolidated checksum assembly
 9. GitHub Release publish
 
 If any stage fails:
@@ -81,8 +82,11 @@ After workflow success, verify the GitHub Release contains:
 
 - `tabid-linux-amd64-glibc.tar.gz`
 - `tabid-linux-amd64-glibc.tar.gz.sha256`
+- `tabid-darwin-arm64.tar.gz`
+- `tabid-darwin-arm64.tar.gz.sha256`
 - `SHA256SUMS`
-- `release-manifest.json`
+- `release-manifest-linux-amd64.json`
+- `release-manifest-darwin-arm64.json`
 
 Confirm the release tag matches the intended test tag.
 
@@ -94,24 +98,35 @@ Download the artifacts locally and run:
 ./scripts/verify-tabid-release-artifacts.sh \
   --bundle ./tabid-linux-amd64-glibc.tar.gz \
   --checksums ./SHA256SUMS \
-  --manifest ./release-manifest.json \
+  --manifest ./release-manifest-linux-amd64.json \
   --expected-repo tabilabs/tabi-v3 \
   --expected-tag <release_tag> \
   --expected-platform linux/amd64
 ```
 
+```bash
+./scripts/verify-tabid-release-artifacts.sh \
+  --bundle ./tabid-darwin-arm64.tar.gz \
+  --checksums ./SHA256SUMS \
+  --manifest ./release-manifest-darwin-arm64.json \
+  --expected-repo tabilabs/tabi-v3 \
+  --expected-tag <release_tag> \
+  --expected-platform darwin/arm64
+```
+
 Expected outcome:
 
-- checksum verification passes
-- bundle content verification passes
-- manifest verification passes
-- runtime smoke test passes on `linux/x86_64`
-- bundled wasm libraries resolve from the extracted `lib/` directory
+- checksum verification passes for both bundles
+- bundle content verification passes for both bundles
+- manifest verification passes for both bundles
+- runtime smoke test passes on a matching host platform
+- bundled wasm libraries resolve from the extracted `lib/` directory instead of another workstation path
 
-Compatibility note:
+Compatibility notes:
 
-- This release is a `linux/amd64` glibc bundle, not a fully static binary.
+- The Linux release is a `linux/amd64` glibc bundle, not a fully static binary.
 - Before handing it to operators, verify the target host provides `glibc >= 2.34` or run the verification script directly on the target class of machine.
+- The macOS release is a `darwin/arm64` bundle only. Do not hand it to Intel Mac operators unless a separate `darwin/amd64` release lane exists.
 
 ## Step 6: Verify Attestation
 
