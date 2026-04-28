@@ -48,6 +48,7 @@ func NewEVMHTTPServer(
 	if err := httpServer.SetListenAddr(LocalAddress, config.HTTPPort); err != nil {
 		return nil, err
 	}
+	logger.Info("EVM HTTP server initialized", "address", LocalAddress, "port", config.HTTPPort)
 	simulateConfig := &SimulateConfig{GasCap: config.SimulationGasLimit, EVMTimeout: config.SimulationEVMTimeout}
 	sendAPI := NewSendAPI(tmClient, txConfigProvider, &SendConfig{slow: config.Slow}, k, ctxProvider, homeDir, simulateConfig, app, antehandler, ConnectionTypeHTTP)
 	ctx := ctxProvider(LatestCtxHeight)
