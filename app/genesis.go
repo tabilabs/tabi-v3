@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	genesistypes "github.com/cosmos/cosmos-sdk/types/genesis"
@@ -48,6 +49,7 @@ type GenesisState map[string]json.RawMessage
 
 // NewDefaultGenesisState generates the default state for the application.
 func NewDefaultGenesisState(cdc codec.JSONCodec) GenesisState {
+	fmt.Println("[genesis] generating default genesis state")
 	encCfg := MakeEncodingConfig()
 	gen := ModuleBasics.DefaultGenesis(cdc)
 
