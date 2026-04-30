@@ -35,6 +35,7 @@ func ReadGenesisImportConfig(opts servertypes.AppOptions) (genesistypes.GenesisI
 	if v := opts.Get(flagGenesisImportFile); v != nil {
 		cfg.GenesisStreamFile = v.(string)
 	}
+	fmt.Printf("[genesis] import config resolved: stream=%v file=%q\n", cfg.StreamGenesisImport, cfg.GenesisStreamFile)
 	return cfg, nil
 }
 

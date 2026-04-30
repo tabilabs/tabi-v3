@@ -22,6 +22,7 @@ func (app *App) BeginBlock(ctx sdk.Context, req abci.RequestBeginBlock) (res abc
 }
 
 func (app *App) MidBlock(ctx sdk.Context, height int64) []abci.Event {
+	app.Logger().Info("MidBlock started", "height", height)
 	_, span := app.GetBaseApp().TracingInfo.Start("MidBlock")
 	defer span.End()
 	return app.BaseApp.MidBlock(ctx, height)
@@ -76,8 +77,10 @@ func (app *App) Commit(ctx context.Context) (res *abci.ResponseCommit, err error
 }
 
 func (app *App) LoadLatest(ctx context.Context, req *abci.RequestLoadLatest) (*abci.ResponseLoadLatest, error) {
+	app.Logger().Info("LoadLatest invoked")
 	err := app.ReloadDB()
 	if err != nil {
+		app.Logger().Error("LoadLatest ReloadDB failed", "err", err)
 		return nil, err
 	}
 	app.mounter()

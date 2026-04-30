@@ -178,6 +178,7 @@ func NewEVMWebSocketServer(
 	if err := httpServer.SetListenAddr(LocalAddress, config.WSPort); err != nil {
 		return nil, err
 	}
+	logger.Info("EVM WebSocket server initialized", "address", LocalAddress, "port", config.WSPort)
 	simulateConfig := &SimulateConfig{GasCap: config.SimulationGasLimit, EVMTimeout: config.SimulationEVMTimeout}
 	apis := []rpc.API{
 		{
