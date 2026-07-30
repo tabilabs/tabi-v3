@@ -11,7 +11,7 @@ import (
 )
 
 func (app *App) BeginBlock(ctx sdk.Context, req abci.RequestBeginBlock) (res abci.ResponseBeginBlock) {
-	app.Logger().Info("BeginBlock started", "height", req.Header.Height)
+	app.Logger().Debug("BeginBlock started", "height", req.Header.Height)
 	tracectx, topSpan := app.GetBaseApp().TracingInfo.Start("Block")
 	topSpan.SetAttributes(attribute.Int64("height", req.Header.Height))
 	app.GetBaseApp().TracingInfo.BlockSpan = &topSpan
@@ -22,14 +22,14 @@ func (app *App) BeginBlock(ctx sdk.Context, req abci.RequestBeginBlock) (res abc
 }
 
 func (app *App) MidBlock(ctx sdk.Context, height int64) []abci.Event {
-	app.Logger().Info("MidBlock started", "height", height)
+	app.Logger().Debug("MidBlock started", "height", height)
 	_, span := app.GetBaseApp().TracingInfo.Start("MidBlock")
 	defer span.End()
 	return app.BaseApp.MidBlock(ctx, height)
 }
 
 func (app *App) EndBlock(ctx sdk.Context, req abci.RequestEndBlock) (res abci.ResponseEndBlock) {
-	app.Logger().Info("EndBlock started", "height", req.Height)
+	app.Logger().Debug("EndBlock started", "height", req.Height)
 	_, span := app.GetBaseApp().TracingInfo.Start("EndBlock")
 	defer span.End()
 	return app.BaseApp.EndBlock(ctx, req)
@@ -65,7 +65,7 @@ func (app *App) DeliverTxBatch(ctx sdk.Context, req sdk.DeliverTxBatchRequest) (
 }
 
 func (app *App) Commit(ctx context.Context) (res *abci.ResponseCommit, err error) {
-	app.Logger().Info("Commit started")
+	app.Logger().Debug("Commit started")
 	if app.GetBaseApp().TracingInfo.BlockSpan != nil {
 		defer (*app.GetBaseApp().TracingInfo.BlockSpan).End()
 	}
