@@ -1090,8 +1090,8 @@ github.com/tabilabs/tabi-tm-db v0.0.0-20251008134422-55c1650c695c h1:Nek1Z5zuAKC
 github.com/tabilabs/tabi-tm-db v0.0.0-20251008134422-55c1650c695c/go.mod h1:X3AVeQcEsjdvivpqzcgrWYuvDVPEmXzjpdWFtfHX8q4=
 github.com/tabilabs/tabi-wasmd v0.0.0-20251013055101-e44bc116e2c5 h1:SttvaOnMGDdne5xLYStbAx0juxeG+BujRE7s8xkQCrE=
 github.com/tabilabs/tabi-wasmd v0.0.0-20251013055101-e44bc116e2c5/go.mod h1:/++yXN121FLs9hmArfX97ukm4q4wMC0REcUYZKrIw5Q=
-github.com/tabilabs/tabi-wasmvm v0.0.0-20251013055324-98a5e3cac2d3 h1:5S/Nr9qswAXXDzCDGfPruvTidGzWWJhfUMvGseE+aKM=
-github.com/tabilabs/tabi-wasmvm v0.0.0-20251013055324-98a5e3cac2d3/go.mod h1:Q0bSEtlktzh7W2hhEaifrFp1Erx11ckQZmjq8FLCyys=
+github.com/tabilabs/tabi-wasmvm v0.0.0-20261008152934-12befed156d3 h1:fUMf4DHp7xjHJaGiUI1ra5sE47uxPqbM2DQLA+yYKOM=
+github.com/tabilabs/tabi-wasmvm v0.0.0-20261008152934-12befed156d3/go.mod h1:2qaMB5ISmYXtpkJR2jy8xxx5Ti8sntOEf1cUgolb4QI=
 github.com/tabilabs/tm-db v0.0.0-20251008123430-71292d209ae0 h1:E07Vyt2yDSPygxbZu+meW0lHB+ayOhUtKTWTCCrlG7E=
 github.com/tabilabs/tm-db v0.0.0-20251008123430-71292d209ae0/go.mod h1:PWsIWOTwdwC7Ow/GUvx8HgUJTO691pBuorIQD8JvwAs=
 github.com/tendermint/btcd v0.1.1 h1:0VcxPfflS2zZ3RiOAHkBiFUcPvbtRj5O7zHmcJWHV7s=

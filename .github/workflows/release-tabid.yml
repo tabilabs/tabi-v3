@@ -78,6 +78,7 @@ jobs:
           WASMVM_DIR="$(go list -m -f '{{if .Replace}}{{.Replace.Dir}}{{else}}{{.Dir}}{{end}}' github.com/CosmWasm/wasmvm)"
           WASMD_DIR="$(go list -m -f '{{if .Replace}}{{.Replace.Dir}}{{else}}{{.Dir}}{{end}}' github.com/CosmWasm/wasmd)"
 
+          go test ./app ./wasmbinding -run '^TestWasmRuntime' -count=1
           make build
           test -n "${WASMVM_DIR}"
           test -n "${WASMD_DIR}"
@@ -129,6 +130,7 @@ jobs:
           awk -v expected="${BUNDLE_DIR}/lib/libwasmvm152.x86_64.so" '$1 == "libwasmvm152.x86_64.so" { if ($3 != expected) exit 1; found=1 } END { exit(found ? 0 : 1) }' "${SMOKE_DIR}/ldd.txt"
           awk -v expected="${BUNDLE_DIR}/lib/libwasmvm155.x86_64.so" '$1 == "libwasmvm155.x86_64.so" { if ($3 != expected) exit 1; found=1 } END { exit(found ? 0 : 1) }' "${SMOKE_DIR}/ldd.txt"
           env -i PATH="${PATH}" HOME="${HOME_DIR}" LD_LIBRARY_PATH= "${BUNDLE_DIR}/tabid" version >/dev/null
+          test "$(env -i PATH="${PATH}" HOME="${HOME_DIR}" LD_LIBRARY_PATH= "${BUNDLE_DIR}/tabid" query wasm libwasmvm-version)" = "1.5.9"
 
       - name: Upload linux workflow artifact
         uses: actions/upload-artifact@v4
@@ -200,6 +202,7 @@ jobs:
 
           test "$(uname -s)" = "Darwin"
           test "$(uname -m)" = "arm64"
+          go test ./app ./wasmbinding -run '^TestWasmRuntime' -count=1
           make build
           test -n "${WASMVM_DIR}"
           test -n "${WASMD_DIR}"
@@ -258,6 +261,7 @@ jobs:
           fi
           codesign --verify --deep --strict "${BUNDLE_DIR}/tabid"
           env -i PATH="${PATH}" HOME="${HOME_DIR}" "${BUNDLE_DIR}/tabid" version >/dev/null
+          test "$(env -i PATH="${PATH}" HOME="${HOME_DIR}" "${BUNDLE_DIR}/tabid" query wasm libwasmvm-version)" = "1.5.9"
 
       - name: Upload darwin workflow artifact
         uses: actions/upload-artifact@v4

@@ -6,7 +6,7 @@ toolchain go1.24.7
 
 require (
 	github.com/CosmWasm/wasmd v0.27.0
-	github.com/CosmWasm/wasmvm v1.5.4
+	github.com/CosmWasm/wasmvm v1.5.9
 	github.com/armon/go-metrics v0.4.1
 	github.com/btcsuite/btcd v0.22.1
 	github.com/cosmos/cosmos-sdk v0.45.10
@@ -227,7 +227,7 @@ require (
 
 replace (
 	github.com/CosmWasm/wasmd => github.com/tabilabs/tabi-wasmd v0.0.0-20251013055101-e44bc116e2c5
-	github.com/CosmWasm/wasmvm => github.com/tabilabs/tabi-wasmvm v0.0.0-20251013055324-98a5e3cac2d3
+	github.com/CosmWasm/wasmvm => github.com/tabilabs/tabi-wasmvm v0.0.0-20261008152934-12befed156d3
 	github.com/confio/ics23/go => github.com/cosmos/cosmos-sdk/ics23/go v0.8.0
 	github.com/cosmos/cosmos-sdk => github.com/tabilabs/tabi-cosmos v0.0.0-20251008140433-b9d104efe0d2
 	github.com/cosmos/iavl => github.com/tabilabs/tabi-iavl v0.0.0-20251008130153-cda1a31b1aae
