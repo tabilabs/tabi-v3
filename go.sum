@@ -1078,8 +1078,8 @@ github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7 h1:epCh84lMvA70
 github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7/go.mod h1:q4W45IWZaF22tdD+VEXcAWRA037jwmWEB5VWYORlTpc=
 github.com/tabilabs/go-ethereum v0.0.0-20251008125536-bcd46584feed h1:PKn5kFlZACgA0MCNgM7szvBww0ltLgH6XgdFe95VMn0=
 github.com/tabilabs/go-ethereum v0.0.0-20251008125536-bcd46584feed/go.mod h1:kcRZmuzRn1lVejiFNTz4l4W7imnpq1bDAnuKS/RyhbQ=
-github.com/tabilabs/tabi-cosmos v0.0.0-20251008140433-b9d104efe0d2 h1:FRo6T8yyDjtQfW9pe/JcFNZ+Zzrbv4933mbVX8kGBO4=
-github.com/tabilabs/tabi-cosmos v0.0.0-20251008140433-b9d104efe0d2/go.mod h1:vcvF/bltgbReKeabFxBcp8DDS/eH7DCF0p0xOdaOLtk=
+github.com/tabilabs/tabi-cosmos v0.0.0-20261009010706-a74a2a35a9b8 h1:dzcUXgLFU4pmqtLAjgy5xfYVAEcRWPppk/FvUXuXqxc=
+github.com/tabilabs/tabi-cosmos v0.0.0-20261009010706-a74a2a35a9b8/go.mod h1:vcvF/bltgbReKeabFxBcp8DDS/eH7DCF0p0xOdaOLtk=
 github.com/tabilabs/tabi-iavl v0.0.0-20251008130153-cda1a31b1aae h1:S/bfjjTE9ulpMQoMww8FCn8ZSjoyLKWU+DYZ2HmRH9E=
 github.com/tabilabs/tabi-iavl v0.0.0-20251008130153-cda1a31b1aae/go.mod h1:qRf8QYUPfrAO7K6VDB2B2l/N7K5L76OorioGBcJBIbw=
 github.com/tabilabs/tabi-ibc-go/v3 v3.0.0-20251008130603-3273ce4aabc5 h1:Etax/HWMgz46WrkKjYVvPbMCOgWeTEjJjIsZMtNPF3w=

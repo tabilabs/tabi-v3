@@ -229,7 +229,7 @@ replace (
 	github.com/CosmWasm/wasmd => github.com/tabilabs/tabi-wasmd v0.0.0-20251013055101-e44bc116e2c5
 	github.com/CosmWasm/wasmvm => github.com/tabilabs/tabi-wasmvm v0.0.0-20261008152934-12befed156d3
 	github.com/confio/ics23/go => github.com/cosmos/cosmos-sdk/ics23/go v0.8.0
-	github.com/cosmos/cosmos-sdk => github.com/tabilabs/tabi-cosmos v0.0.0-20251008140433-b9d104efe0d2
+	github.com/cosmos/cosmos-sdk => github.com/tabilabs/tabi-cosmos v0.0.0-20261009010706-a74a2a35a9b8
 	github.com/cosmos/iavl => github.com/tabilabs/tabi-iavl v0.0.0-20251008130153-cda1a31b1aae
 	github.com/cosmos/ibc-go/v3 => github.com/tabilabs/tabi-ibc-go/v3 v3.0.0-20251008130603-3273ce4aabc5
 	github.com/ethereum/go-ethereum => github.com/tabilabs/go-ethereum v0.0.0-20251008125536-bcd46584feed
